@@ -1,0 +1,7 @@
+encryption
+
+export backups individually
+
+data/User_DE/0/com.android.providers.telephony/databases
+/data/data/com.android.providers/telephony/databases/mmssms.db
+/data/data/com.android.providers.telephony/databases/mmssms.db

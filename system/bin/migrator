@@ -1,0 +1,433 @@
+#!/system/bin/sh
+# Migrator
+# © 2018-2020, VR25 (patreon.com/vr25)
+# License: GPLv3+
+
+
+echo
+option=$1
+[ -n "$1" ] && shift
+set -u
+unset IFS
+umask 0077
+bkpDir=/data/media/migrator/bkp
+
+
+# temporarily disable SELinux
+sestatus=$(getenforce)
+setenforce 0 || exit $?
+trap '[ $sestatus != Permissive ] && setenforce 1; set +x; echo' EXIT
+
+
+# prepare busybox and extra binaries
+[ -x /dev/.busybox/ls ] || {
+  mkdir -p /dev/.busybox
+  chmod 0700 /dev/.busybox
+  if [ -f /data/adb/bin/busybox ]; then
+    [ -x /data/adb/bin/busybox ] || chmod -R 0700 /data/adb/bin
+    /data/adb/bin/busybox --install -s /dev/.busybox
+  elif [ -f /data/adb/magisk/busybox ]; then
+    [ -x /data/adb/magisk/busybox ] || chmod 0700 /data/adb/magisk/busybox
+    /data/adb/magisk/busybox --install -s /dev/.busybox
+  elif which busybox > /dev/null; then
+    eval "$(which busybox) --install -s /dev/.busybox"
+  else
+    echo "(!) Install busybox or simply place it in /data/adb/bin/"
+    exit 3
+  fi
+}
+export PATH=/data/adb/bin:/dev/.busybox:$PATH
+
+
+# check syntax, again
+/system/bin/sh -n $(readlink -f $0) || exit $?
+
+
+sysdata="adbKeys btConfig wifiConfigStore wifiHotspot xlua"
+adbKeys=(/data/misc/adb adb_keys system:shell 0640) || exit $?
+btConfig=(/data/misc/bluedroid bt_config.conf bluetooth:bluetooth 0660)
+wifiConfigStore=(/data/misc/wifi WifiConfigStore.xml system:system 0600)
+wifiHotspot=(/data/misc/wifi softap.conf system:system 0600)
+xlua=(/data/system/xlua xlua.db\* system:system 0770)
+
+
+case "$option" in
+
+  *-b*) # backup
+
+    params="$@"
+    extras="${params#* + }"
+    params="${params% + *}"
+    extras="${extras#$params}"
+    set -- $params
+
+    pkgList_="$(pm list packages -3 || exit 1)"
+    pkgList_="${pkgList_//package:}"
+
+    # preserve most recent backup
+    rm -rf ${bkpDir}.old 2>/dev/null
+    mv $bkpDir ${bkpDir}.old 2>/dev/null
+
+    # backup magisk data
+    case $option${1-} in
+      -bm*|*--magisk)
+        set -x
+        mkdir -p $bkpDir/_magisk
+        test ${1:-.} == --magisk && shift
+        IFS=$'\n'
+        for i in $(ls -1d /data/adb/* /data/adb/.* 2>/dev/null | grep -v /data/adb/magisk); do
+          cp -dlR "$i" $bkpDir/_magisk/
+        done
+        unset IFS
+        set +x
+      ;;
+    esac
+
+    pkgList="$(echo "$pkgList_" | grep -v com.offsec.nhterm | grep -E "${@:-..}")"
+
+    # remove backups of uninstalled apps
+    for pkg in $(ls -1d $bkpDir/* ${bkpDir}.old/* 2>/dev/null \
+      | grep -Ev '/_magisk$|/migrator.sh$|/_settings$|/_sysdata$')
+    do
+      case "$pkgList_" in
+        *${pkg##*/}*) :;;
+        *) rm -rf $pkg;;
+      esac
+    done
+    unset pkgList_
+
+    set -x
+
+    for pkg in $pkgList $extras; do
+
+      test -d /data/data/$pkg || continue
+
+      # backup app
+      mkdir -p $bkpDir/$pkg
+      cp -l /data/app/${pkg}-*/*.apk $bkpDir/$pkg/ 2>/dev/null
+
+      # backup data
+      killall -STOP $pkg > /dev/null 2>&1
+      mkdir $bkpDir/$pkg/$pkg
+      IFS=$'\n'
+      for i in $(ls -1d /data/data/$pkg/* /data/data/$pkg/.* 2>/dev/null \
+        | grep -Ev '/app_tmp|/cache$|/dex$|/lib$|oat$')
+      do
+        cp -dlR "$i" $bkpDir/$pkg/$pkg/
+      done
+      unset IFS
+
+      # ensure restored $pkg can use Google Could Messaging
+      rm -f $bkpDir/$pkg/$pkg/shared_prefs/com.google.android.gms.appid.xml 2>/dev/null
+
+      # backup runtime permissions
+      pm dump $pkg | sed -n 's/: granted=true, flags=.*//p' | sed -n 's/.*an/an/p' > $bkpDir/$pkg/runtime-perms.txt
+      killall -CONT $pkg > /dev/null 2>&1
+
+    done
+
+    # backup migrator itself
+    cp $(readlink -f "$0") $bkpDir/migrator.sh
+
+    # backup Android settings
+    mkdir $bkpDir/_settings
+    settings list global > $bkpDir/_settings/global.txt
+    settings list secure > $bkpDir/_settings/secure.txt
+    settings list system > $bkpDir/_settings/system.txt
+
+    # backup system data
+    mkdir $bkpDir/_sysdata
+    for i in $sysdata; do
+      eval "cp -l \${$i[0]}/\${$i[1]} $bkpDir/_sysdata/ 2>/dev/null"
+    done
+  ;;
+
+
+  *-d*) # delete
+    set -x
+    [[ "$*" != */* ]] && {
+      cd $bkpDir && eval rm -rf "$@"
+      cd ${bkpDir}.old && eval rm -rf "$@"
+    } 2>/dev/null
+  ;;
+
+
+  *-e*) # export
+    cd $bkpDir || exit $?
+    tar -cv . | lzop -1v > ${1:-/sdcard}/migrator-backups.tar.lzo
+    cp $(readlink -f "$0") ${1:-/sdcard}/migrator.sh
+  ;;
+
+
+  *-i*) # import
+    rm -rf ${bkpDir}.old 2>/dev/null
+    mkdir ${bkpDir}.old
+    cd ${bkpDir}.old
+    lzop -cdv ${1:-/sdcard}/migrator-backups.tar.lzo | tar -xvf -
+  ;;
+
+
+  *-l*) # list
+    echo $bkpDir
+    ls -1p $bkpDir 2>/dev/null | sed -En -e '/^migrator.sh/d' -e "/${@:-..}/s/^/  /p"
+    echo
+    echo ${bkpDir}.old
+    ls -1p ${bkpDir}.old 2>/dev/null | sed -En -e '/^migrator.sh/d' -e "/${@:-..}/s/^/  /p"
+  ;;
+
+
+  *-r*) # restore
+
+    restoreMagiskData=false
+    restoreSettings=false
+    restoreSysData=false
+
+    case "$option $*" in
+      *--magisk*|-rm*|-r?m*|-r??m*|-r???m*) restoreMagiskData=true;;
+    esac
+
+    case "$option $*" in
+      *--old*|-ro*|-r?o*|-r??o*|-r???o*) bkpDir=${bkpDir}.old;;
+    esac
+
+    case "$option $*" in
+      *--settings*|-rs*|-r?s*|-r??s*|-r???s*) restoreSettings=true;;
+    esac
+
+    case "$option $*" in
+      *--sysdata*|-rS*|-r?S*|-r??S*|-r???S*) restoreSysData=true;;
+    esac
+
+    set -x
+    ls -d $bkpDir/* > /dev/null && cd $bkpDir || exit $?
+
+    # restore Android settings
+    $restoreSettings && {
+      settings_global="$(settings list global)"
+      settings_secure="$(settings list secure)"
+      settings_system="$(settings list system)"
+
+      for namespace in global secure system; do
+        for setting in $(cat $bkpDir/_settings/$namespace.txt); do
+          case "$(eval echo \"\$settings_$namespace\")" in
+            *${setting%=*}=*)
+              settings put $namespace ${setting%=*} "${setting#*=}"
+            ;;
+          esac
+        done
+      done
+    }
+
+    # enable "unknown sources" and disable package verification
+    settings put secure install_non_market_apps 1
+    settings put global verifier_verify_adb_installs 0
+    settings put global package_verifier_enable 0
+
+    # restore system data
+    $restoreSysData && {
+      (for i in $sysdata; do
+        set -f
+        set -- $(eval echo \${$i[@]})
+        set +f
+        ls $bkpDir/_sysdata/$2 > /dev/null 2>&1 && {
+          mkdir $1 2>/dev/null && {
+            chown $3 $1
+            chmod $4 $1
+            /system/bin/restorecon $1
+          }
+          rm $1/$2 2>/dev/null
+          cp -l $bkpDir/_sysdata/$2 $1/
+          chown $3 $1/$2
+          chmod $4 $1/$2
+          /system/bin/restorecon $1/$2
+        }
+      done)
+    }
+
+    $restoreMagiskData && {
+      IFS=$'\n'
+      for i in $(ls -1d $bkpDir/_magisk/* $bkpDir/_magisk/.*); do
+        rm -rf "/data/adb/${i##*/}"
+        cp -dlR "$i" /data/adb/
+      done 2>/dev/null
+      unset IFS
+
+      for i in $(ls -1d /data/adb/* /data/adb/.* | grep -v /data/adb/magisk); do
+        chown -R 0:0 $i
+        chmod -R 0755 $i
+        chcon -R u:object_r:system_file:s0 $i
+      done
+    } 2>/dev/null
+
+    # remove obsolete positional parameters
+    for i in $(seq 4); do
+      case "${1-}" in
+        --magisk|--old|--settings|--sysdata) shift;;
+        *) break;;
+      esac
+    done
+
+    for pkg in $(ls -1 $bkpDir 2>/dev/null | grep -Ev '^_magisk$|^migrator.sh$|^_settings$|^_sysdata$' | grep -E "${@:-..}"); do
+
+      killall $pkg > /dev/null 2>&1
+
+      # restore app
+      test -f $pkg/base.apk && {
+        # base APK
+        pm install -r $pkg/base.apk || continue
+        # split APKs
+        ls $pkg/split_*.apk > /dev/null 2>&1 && {
+          for pkg_ in $pkg/split_*.apk; do
+            pm install -r -p $pkg $pkg_
+          done
+        }
+      }
+
+      # restore data
+      libDir=$(readlink -f /data/data/$pkg/lib)
+      set -- $(ls -dn /data/data/$pkg)
+      [ -n "$pkg" ] && rm -rf /data/data/$pkg 2>/dev/null
+      cp -dlR $pkg/$pkg /data/data/
+      test -n "$libDir" && ln -sf $libDir /data/data/$pkg/lib
+
+      # restore attributes
+      chown -R $3:$4 /data/data/$pkg
+      chmod -R 0771 /data/data/$pkg
+      /system/bin/restorecon -R /data/data/$pkg
+
+      # restore runtime permissions
+      for perm in $(cat $pkg/runtime-perms.txt); do
+        pm grant $pkg $perm
+      done
+
+      # clean up
+      #[[ -d "$pkg" && $pkg != */*]] && rm -rf $pkg
+
+    done
+  ;;
+
+
+  *) # help text
+    echo "Migrator v2020.6.21-beta (202006210)
+Copyright 2018-2020, VR25 (patreon.com/vr25)
+License: GPLv3+
+
+This is a ROM migration utility and backup solution.
+
+ZERO warranties, use at your own risk!
+
+
+Usage
+  ${0##*/} <option> [arg ..]
+
+Options
+  -b[m]|--backup [--magisk] [egrep options] [\"regex\"] [+ extra pkgs (full names)]
+  -d|--delete <\"backup name (wildcards supported)\" ..>
+  -e|--export [destination directory]
+  -i|--import [source directory]
+  -l|--list [egrep options] [\"regex\"]
+  -r[mosS]|--restore [--magisk] [--old] [--settings] --sysdata [egrep options] [\"regex\"]
+
+Note
+  [egrep options] [\"regex\"] is for matching user pkgs only.
+
+Examples
+  ${0##*/} --backup \"facebook.lite|instagram\" (Facebook Lite and Instagram)
+  ${0##*/} -b . + com.android.vending com.android.inputmethod.latin (backup all user apps (dot), plus two system apps, excluding APKs outside /data/app/)
+  ${0##*/} -bm -v . (backup settings, plus system and magisk (m) data; -v means exclude; dot means all apps)
+  ${0##*/} -bm (backup everything, except system apps)
+  ${0##*/} --delete \\* (all backups)
+  ${0##*/} -d \"*facebook.lite*\" \"*instag*\"
+  ${0##*/} --export facebook.lite
+  ${0##*/} -e /storage/XXXX-XXXX facebook.lite
+  ${0##*/} --import facebook.lite
+  ${0##*/} -i /storage/XXXX-XXXX facebook.lite
+  ${0##*/} --list
+  ${0##*/} -l facebook.lite
+  ${0##*/} --restore facebook.lite
+  ${0##*/} --r --old facebook.lite (restore older backup)
+  ${0##*/} -rs -v . (restore ONLY settings)
+  ${0##*/} -rS -v . (restore ONLY system data)
+  ${0##*/} -rm -v . (restore ONLY magisk data)
+  ${0##*/} -rmsS (restore everything)
+
+
+Migrator can backup/restore apps (including split APKs), respective data and runtime permissions.
+
+Everything in /data/adb/, except magisk/ is considered \"Magisk data\".
+This data is not backed up nor restored by default (requires dedicated options; see examples).
+After restore, you have to launch Magisk Manager and disable or remove all modules that are or may be incompatible with the [new] ROM.
+
+Android settings and system data (ADB keys, Bluetooth, WiFi, XPrivacyLua) are always included in backups, but never restored automatically with apps (requires dedicated options; see examples).
+
+Call logs, contacts, and SMS/MMS data are not backed up at this point.
+These are stored in complex databases and the files are found in variable locations.
+Export your contacts to a .vcf file or use a third-party app to backup/restore all telephony data.
+
+Backups of uninstalled apps are automatically removed just before new backups start.
+
+For greater compatibility and safety, system apps are not backed up, unless specified as \"extras\" (see examples).
+No APK outside /data/app/ is ever backed up.
+Data of specified system apps is always backed up.
+
+Migrator itself is included in backups and exported alongside backup archives.
+
+Two backups are kept: $bkpDir and ${bkpDir}.old.
+
+These backups are local and take virtually no extra space (hard links).
+
+Backups can be exported to external storage as .tar.lzo archives.
+
+--export saves to /sdcard/migrator-backups.tar.lzo by default.
+Only the most recent backups are exported.
+
+--import saves to ${bkpDir}.old/.
+It reads from /sdcard/migrator-backups.tar.lzo by default.
+
+The Magisk module variant installs NetHunter Terminal.
+Highly recommended, it's always excluded from backups.
+If you use another terminal, it must be excluded manually (e.g., "migrator --backup -v termux").
+This is because apps being backed up are temporarily suspended.
+Before restore, these are terminated.
+Thus, not excluding the terminal that runs migrator will lead to incomplete backup/restore.
+
+Why NetHunter Terminal?
+It's free and open source, light, powerful, backed by Offensive Security (company) and regularly updated.
+The APK is downloaded from https://store.nethunter.com/repo .
+You can always compare the package signatures and/or checksums.
+
+System data
+  /data/misc/
+    adb/adb_keys
+    bluedroid/bp_config.conf (Bluetooth)
+    wifi/WifiConfigStore.xml (Wi-Fi)
+    wifi/softap.conf (Wi-Fi hotspot)
+  /data/system
+    xlua/xlua.db* (XprivacyLua)
+
+Should you face any Bluetooth/Wi-Fi issues after data restore, simply remove the appropriate files and reboot.
+
+
+ROM Migration Steps
+
+1. Backup everything: \"${0##*/} -bm . + com.android.vending EXTRAS\".
+2. Recovery > install [new] ROM  (factory reset implied) + Magisk > reboot.
+3. Flash migrator from Magisk Manager (no reboot needed afterwards).
+4. Launch NetHunter Terminal (bundled), select \"AndroidSu\" shell and run \"M -rmsS\" or \"/dev/M -rmsS\" to restore everything.
+5. Launch Magisk Manager and disable or remove all modules that are or may be incompatible with the [new] ROM.
+6. Reboot.
+7. If you face Bluetooth and/or WiFi issues, either reset network settings or remove the restored configuration files (see above) with \"rm -rf filepath\".
+
+EXTRAS are system packages (full names).
+
+
+Tips
+
+Busybox and extra binaries can be placed in /data/adb/bin/.
+
+The default compression program (lzop) can be overridden by placing the desired replacement (or a symlink to it) in that location.
+e.g., \"mkdir -p /data/adb/bin; ln -s /system/xbin/pigz /data/adb/bin/\"
+The file extension will remain .tar.lzo, though." | less
+  ;;
+esac
+exit 0
