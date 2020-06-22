@@ -1,5 +1,6 @@
 #!/system/bin/sh
 # Migrator
+# Android Backup Solution and ROM Migration Utility
 # © 2018-2020, VR25 (patreon.com/vr25)
 # License: GPLv3+
 
@@ -67,12 +68,13 @@ case "$option" in
     # preserve most recent backup
     rm -rf ${bkpDir}.old 2>/dev/null
     mv $bkpDir ${bkpDir}.old 2>/dev/null
+    mkdir $bkpDir
 
     # backup magisk data
     case $option${1-} in
       -bm*|*--magisk)
         set -x
-        mkdir -p $bkpDir/_magisk
+        mkdir $bkpDir/_magisk
         test ${1:-.} == --magisk && shift
         IFS=$'\n'
         for i in $(ls -1d /data/adb/* /data/adb/.* 2>/dev/null | grep -v /data/adb/magisk); do
@@ -103,7 +105,7 @@ case "$option" in
       test -d /data/data/$pkg || continue
 
       # backup app
-      mkdir -p $bkpDir/$pkg
+      mkdir $bkpDir/$pkg
       cp -l /data/app/${pkg}-*/*.apk $bkpDir/$pkg/ 2>/dev/null
 
       # backup data
@@ -111,7 +113,7 @@ case "$option" in
       mkdir $bkpDir/$pkg/$pkg
       IFS=$'\n'
       for i in $(ls -1d /data/data/$pkg/* /data/data/$pkg/.* 2>/dev/null \
-        | grep -Ev '/app_tmp|/cache$|/dex$|/lib$|oat$')
+        | grep -Ev '/app_tmp|/cache$|/code_cache$|/dex$|/lib$|oat$')
       do
         cp -dlR "$i" $bkpDir/$pkg/$pkg/
       done
@@ -275,16 +277,21 @@ case "$option" in
       test -f $pkg/base.apk && {
         # base APK
         pm install -r $pkg/base.apk || continue
+        rm $pkg/base.apk
+        cp -l /data/app/${pkg}-*/base.apk $pkg/
         # split APKs
         ls $pkg/split_*.apk > /dev/null 2>&1 && {
           for pkg_ in $pkg/split_*.apk; do
-            pm install -r -p $pkg $pkg_
+            pm install -r -p $pkg $pkg_ && {
+              rm $pkg_
+              cp -l /data/app/${pkg}-*/${pkg_##*/} $pkg/
+            }
           done
         }
       }
 
       # restore data
-      libDir=$(readlink -f /data/data/$pkg/lib)
+      libDir=$(readlink /data/data/$pkg/lib)
       set -- $(ls -dn /data/data/$pkg)
       [ -n "$pkg" ] && rm -rf /data/data/$pkg 2>/dev/null
       cp -dlR $pkg/$pkg /data/data/
@@ -292,7 +299,7 @@ case "$option" in
 
       # restore attributes
       chown -R $3:$4 /data/data/$pkg
-      chmod -R 0771 /data/data/$pkg
+      chmod -R 0775 /data/data/$pkg
       /system/bin/restorecon -R /data/data/$pkg
 
       # restore runtime permissions
@@ -308,11 +315,11 @@ case "$option" in
 
 
   *) # help text
-    echo "Migrator v2020.6.21-beta (202006210)
+    echo "Migrator v2020.6.22-beta (202006220)
+Android Backup Solution and ROM Migration Utility
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+
 
-This is a ROM migration utility and backup solution.
 
 ZERO warranties, use at your own risk!
 
@@ -426,7 +433,7 @@ Tips
 Busybox and extra binaries can be placed in /data/adb/bin/.
 
 The default compression program (lzop) can be overridden by placing the desired replacement (or a symlink to it) in that location.
-e.g., \"mkdir -p /data/adb/bin; ln -s /system/xbin/pigz /data/adb/bin/\"
+e.g., \"mkdir -p /data/adb/bin; ln -s /system/xbin/pigz /data/adb/bin/lzop\"
 The file extension will remain .tar.lzo, though." | less
   ;;
 esac

@@ -1,11 +1,26 @@
-Migrator is a ROM migration utility and backup solution.
+Migrator - Android Backup Solution and ROM Migration Utility
 
 It can backup/restore apps (including split APKs) with respective data and runtime permissions, system and Magisk data (including settings).
 
 ZERO warranties, use at your own risk!
-Refer to "migrator --help" or "M -h".
 
-If these executables aren't readily available (before a reboot), use "/dev/migrator" or "/dev/M".
+Install as a regular Magisk module (no reboot needed afterwards, though).
+Alternatively, you can extract `system/bin/migrator` from the zip and run it as `sh filepath` (yes, no Magisk installation required).
+
+The documentation is bundled.
+Refer to `migrator --help` or `M -h`.
+It can be exported to a file: `M -h > file`
+
+If these executables aren't readily available (before a reboot), use `/dev/migrator` or `/dev/M`.
+
+
+v2020.6.22-beta (202006220)
+
+Exclude code_cache/ from app data backups.
+Fixed app data lib symlink issue.
+General optimizations
+Refresh APK snapshots after successful restore.
+Updated help text.
 
 
 v2020.6.21-beta (202006210)
