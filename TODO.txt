@@ -2,8 +2,21 @@ encryption
 
 export backups individually
 
-data/User_DE/0/com.android.providers.telephony/databases
-/data/data/com.android.providers/telephony/databases/mmssms.db
-/data/data/com.android.providers.telephony/databases/mmssms.db
-
 backup only app|data
+
+
+ssaid
+freeze app after restore
+unfreeze on next boot
+  service.sh and manual script in /sdcard/
+
+16 alphanumeric characters
+[a-z1-9]{16}
+
+
+restore app
+if ssaid
+  launch app
+  freeze app
+  add to unfreeze script
+  restore ssaid

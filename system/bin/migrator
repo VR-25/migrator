@@ -44,12 +44,15 @@ export PATH=/data/adb/bin:/dev/.busybox:$PATH
 /system/bin/sh -n $(readlink -f $0) || exit $?
 
 
-sysdata="adbKeys btConfig wifiConfigStore wifiHotspot xlua"
-adbKeys=(/data/misc/adb adb_keys system:shell 0640) || exit $?
-btConfig=(/data/misc/bluedroid bt_config.conf bluetooth:bluetooth 0660)
-wifiConfigStore=(/data/misc/wifi WifiConfigStore.xml system:system 0600)
-wifiHotspot=(/data/misc/wifi softap.conf system:system 0600)
-xlua=(/data/system/xlua xlua.db\* system:system 0770)
+sysdata="/data/system_?e/accounts_?e.db*
+/data/misc/adb/adb_keys
+/data/misc/bluedroid/bt_config.conf
+/data/misc/wifi/WifiConfigStore.xml
+/data/misc/wifi softap.conf
+/data/system/xlua/xlua.db*
+/data/system/users/0/photo.png
+/data/system/users/0/wallpaper*
+/data/user*/0/com.android.*provider*/databases/*.db*"
 
 
 case "$option" in
@@ -68,7 +71,7 @@ case "$option" in
     # preserve most recent backup
     rm -rf ${bkpDir}.old 2>/dev/null
     mv $bkpDir ${bkpDir}.old 2>/dev/null
-    mkdir $bkpDir
+    mkdir -p $bkpDir
 
     # backup magisk data
     case $option${1-} in
@@ -98,6 +101,9 @@ case "$option" in
     done
     unset pkgList_
 
+    test -f /data/system/users/0/runtime-permissions.xml \
+      && bkpRuntimePerms=true \
+      || bkpRuntimePerms=false
     set -x
 
     for pkg in $pkgList $extras; do
@@ -119,11 +125,15 @@ case "$option" in
       done
       unset IFS
 
-      # ensure restored $pkg can use Google Could Messaging
+      # ensure restored $pkg can use Google Clould Messaging
       rm -f $bkpDir/$pkg/$pkg/shared_prefs/com.google.android.gms.appid.xml 2>/dev/null
 
       # backup runtime permissions
-      pm dump $pkg | sed -n 's/: granted=true, flags=.*//p' | sed -n 's/.*an/an/p' > $bkpDir/$pkg/runtime-perms.txt
+      $bkpRuntimePerms && {
+        sed -n "/$pkg/,/\<\//p" /data/system/users/0/runtime-permissions.xml \
+          | grep 'granted=\"true\"' \
+          | grep -o 'android.permission.*[A-Z]' > $bkpDir/$pkg/runtime-perms.txt
+      }
       killall -CONT $pkg > /dev/null 2>&1
 
     done
@@ -139,8 +149,12 @@ case "$option" in
 
     # backup system data
     mkdir $bkpDir/_sysdata
+    cp -l /data/system/users/0/settings_ssaid.xml $bkpDir/_sysdata/ 2>/dev/null
     for i in $sysdata; do
-      eval "cp -l \${$i[0]}/\${$i[1]} $bkpDir/_sysdata/ 2>/dev/null"
+      test -f $i || continue
+      cp -l $i $bkpDir/_sysdata/
+      stat -c "rm %n 2>/dev/null; cp -l $bkpDir/_sysdata/${i##*/} %n; chown %U:%G %n; \
+        chmod %a %n; /system/bin/restorecon %n" $i >> $bkpDir/_sysdata/restore.sh
     done
   ;;
 
@@ -227,23 +241,11 @@ case "$option" in
 
     # restore system data
     $restoreSysData && {
-      (for i in $sysdata; do
-        set -f
-        set -- $(eval echo \${$i[@]})
-        set +f
-        ls $bkpDir/_sysdata/$2 > /dev/null 2>&1 && {
-          mkdir $1 2>/dev/null && {
-            chown $3 $1
-            chmod $4 $1
-            /system/bin/restorecon $1
-          }
-          rm $1/$2 2>/dev/null
-          cp -l $bkpDir/_sysdata/$2 $1/
-          chown $3 $1/$2
-          chmod $4 $1/$2
-          /system/bin/restorecon $1/$2
-        }
-      done)
+      mkdir /data/system/xlua 2>/dev/null && {
+        chown 1000:1000 /data/system/xlua
+        chmod 0770 /data/system/xlua
+      }
+      . $bkpDir/_sysdata/restore.sh
     }
 
     $restoreMagiskData && {
@@ -288,6 +290,13 @@ case "$option" in
             }
           done
         }
+        # restore Settings.Secure.ANDROID_ID (SSAID)
+        # grep -q $pkg $bkpDir/_sysdata/settings_ssaid.xml && {
+        #   # launch app
+        #   pm suspend $pkg 2>/dev/null || pm disable $pkg
+        #   echo "pm unsuspend $pkg 2>/dev/null || pm enable $pkg" >> ${bkpDir%/*}/enable-ssaid-apps.sh
+        #   # restore ssaid
+        # }
       }
 
       # restore data
@@ -315,7 +324,7 @@ case "$option" in
 
 
   *) # help text
-    echo "Migrator v2020.6.22-beta (202006220)
+    echo "Migrator v2020.6.24-beta (202006240)
 Android Backup Solution and ROM Migration Utility
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+
@@ -365,11 +374,11 @@ Everything in /data/adb/, except magisk/ is considered \"Magisk data\".
 This data is not backed up nor restored by default (requires dedicated options; see examples).
 After restore, you have to launch Magisk Manager and disable or remove all modules that are or may be incompatible with the [new] ROM.
 
-Android settings and system data (ADB keys, Bluetooth, WiFi, XPrivacyLua) are always included in backups, but never restored automatically with apps (requires dedicated options; see examples).
+Android settings and system data (accounts, ADB keys, Bluetooth, com.android.*provider*, user picture, wallpaper, WiFi, XPrivacyLua) are always included in backups, but never restored automatically with apps (requires dedicated options; see examples).
 
-Call logs, contacts, and SMS/MMS data are not backed up at this point.
+Accounts, call logs, contacts and SMS/MMS data restore is not fully guaranteed.
 These are stored in complex databases and the files are found in variable locations.
-Export your contacts to a .vcf file or use a third-party app to backup/restore all telephony data.
+Thus, you may want to export your contacts to a vCard file or use a third-party app to backup/restore all telephony data.
 
 Backups of uninstalled apps are automatically removed just before new backups start.
 
@@ -399,20 +408,22 @@ Before restore, these are terminated.
 Thus, not excluding the terminal that runs migrator will lead to incomplete backup/restore.
 
 Why NetHunter Terminal?
-It's free and open source, light, powerful, backed by Offensive Security (company) and regularly updated.
-The APK is downloaded from https://store.nethunter.com/repo .
+It's free and open source, very light and regularly updated.
+The homepage is https://store.nethunter.com/en/packages/com.offsec.nhterm .
 You can always compare the package signatures and/or checksums.
 
 System data
-  /data/misc/
-    adb/adb_keys
-    bluedroid/bp_config.conf (Bluetooth)
-    wifi/WifiConfigStore.xml (Wi-Fi)
-    wifi/softap.conf (Wi-Fi hotspot)
-  /data/system
-    xlua/xlua.db* (XprivacyLua)
+  /data/system_?e/accounts_?e.db*
+  /data/misc/adb/adb_keys
+  /data/misc/bluedroid/bt_config.conf
+  /data/misc/wifi/WifiConfigStore.xml
+  /data/misc/wifi softap.conf
+  /data/system/xlua/xlua.db*
+  /data/system/users/0/photo.png
+  /data/system/users/0/wallpaper*
+  /data/user*/0/com.android.*provider*/databases/*.db*
 
-Should you face any Bluetooth/Wi-Fi issues after data restore, simply remove the appropriate files and reboot.
+Should you face any Bluetooth/Wi-Fi issues after data restore, just remove the respective configuration files and reboot or simply reset network settings.
 
 
 ROM Migration Steps
@@ -421,9 +432,9 @@ ROM Migration Steps
 2. Recovery > install [new] ROM  (factory reset implied) + Magisk > reboot.
 3. Flash migrator from Magisk Manager (no reboot needed afterwards).
 4. Launch NetHunter Terminal (bundled), select \"AndroidSu\" shell and run \"M -rmsS\" or \"/dev/M -rmsS\" to restore everything.
-5. Launch Magisk Manager and disable or remove all modules that are or may be incompatible with the [new] ROM.
+5. Launch Magisk Manager and disable/remove all modules that are or may be incompatible with the [new] ROM.
 6. Reboot.
-7. If you face Bluetooth and/or WiFi issues, either reset network settings or remove the restored configuration files (see above) with \"rm -rf filepath\".
+7. If you face Bluetooth and/or WiFi issues, either reset network settings or remove the respective configuration files (see above).
 
 EXTRAS are system packages (full names).
 
@@ -434,7 +445,7 @@ Busybox and extra binaries can be placed in /data/adb/bin/.
 
 The default compression program (lzop) can be overridden by placing the desired replacement (or a symlink to it) in that location.
 e.g., \"mkdir -p /data/adb/bin; ln -s /system/xbin/pigz /data/adb/bin/lzop\"
-The file extension will remain .tar.lzo, though." | less
+The file extension will remain .tar.lzo, though." | more
   ;;
 esac
 exit 0

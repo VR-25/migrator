@@ -14,6 +14,16 @@ It can be exported to a file: `M -h > file`
 If these executables aren't readily available (before a reboot), use `/dev/migrator` or `/dev/M`.
 
 
+v2020.6.24-beta (202006240)
+
+Backup/restore accounts, call logs, contacts and SMS/MMS as well.
+Backup runtime permissions directly from the dedicated XML file.
+Fixed mkdir issue.
+Backup app specific Android IDs. Restore is WIP.
+More modular system data backup method
+Use `more` instead of `less` (buggy scrolling) for displaying the help text.
+
+
 v2020.6.22-beta (202006220)
 
 Exclude code_cache/ from app data backups.
