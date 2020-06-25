@@ -1,22 +1,6 @@
 encryption
 
 export backups individually
+  implies -b if package has not been backed up
 
 backup only app|data
-
-
-ssaid
-freeze app after restore
-unfreeze on next boot
-  service.sh and manual script in /sdcard/
-
-16 alphanumeric characters
-[a-z1-9]{16}
-
-
-restore app
-if ssaid
-  launch app
-  freeze app
-  add to unfreeze script
-  restore ssaid

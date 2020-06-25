@@ -1,6 +1,6 @@
 Migrator - Android Backup Solution and ROM Migration Utility
 
-It can backup/restore apps (including split APKs) with respective data and runtime permissions, system and Magisk data (including settings).
+It can backup/restore apps (including split APKs and SSAIDs) with respective data and runtime permissions, system and Magisk data (including settings).
 
 ZERO warranties, use at your own risk!
 
@@ -12,6 +12,13 @@ Refer to `migrator --help` or `M -h`.
 It can be exported to a file: `M -h > file`
 
 If these executables aren't readily available (before a reboot), use `/dev/migrator` or `/dev/M`.
+
+
+v2020.6.25-beta (202006250)
+
+Restore app specific Android IDs.
+Fixed accounts backup not working.
+Optimized parsing of options to avoid conflicts with certain package names.
 
 
 v2020.6.24-beta (202006240)
@@ -31,8 +38,3 @@ Fixed app data lib symlink issue.
 General optimizations
 Refresh APK snapshots after successful restore.
 Updated help text.
-
-
-v2020.6.21-beta (202006210)
-
-Rewritten from scratch.

@@ -8,16 +8,24 @@
 echo
 option=$1
 [ -n "$1" ] && shift
+
 set -u
 unset IFS
 umask 0077
+
+ssaid=false
 bkpDir=/data/media/migrator/bkp
+ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
+ssaid_xml=/data/system/users/0/settings_ssaid.xml
+ssaid_boot_script=${bkpDir%/*}/enable-ssaid-apps.sh
 
 
 # temporarily disable SELinux
 sestatus=$(getenforce)
 setenforce 0 || exit $?
-trap '[ $sestatus != Permissive ] && setenforce 1; set +x; echo' EXIT
+
+trap '[ $sestatus != Permissive ] && setenforce 1; set +x; $ssaid && \
+  echo "(i) Reboot & run \"${0##*/} -s\" to enable apps with Settings.Secure.ANDROID_ID (SSAID)"; echo' EXIT
 
 
 # prepare busybox and extra binaries
@@ -44,7 +52,7 @@ export PATH=/data/adb/bin:/dev/.busybox:$PATH
 /system/bin/sh -n $(readlink -f $0) || exit $?
 
 
-sysdata="/data/system_?e/accounts_?e.db*
+sysdata="/data/system_?e/0/accounts_?e.db*
 /data/misc/adb/adb_keys
 /data/misc/bluedroid/bt_config.conf
 /data/misc/wifi/WifiConfigStore.xml
@@ -149,9 +157,9 @@ case "$option" in
 
     # backup system data
     mkdir $bkpDir/_sysdata
-    cp -l /data/system/users/0/settings_ssaid.xml $bkpDir/_sysdata/ 2>/dev/null
+    cp -l $ssaid_xml $bkpDir/_sysdata/ 2>/dev/null
     for i in $sysdata; do
-      test -f $i || continue
+      ls $i > /dev/null 2>&1 || continue
       cp -l $i $bkpDir/_sysdata/
       stat -c "rm %n 2>/dev/null; cp -l $bkpDir/_sysdata/${i##*/} %n; chown %U:%G %n; \
         chmod %a %n; /system/bin/restorecon %n" $i >> $bkpDir/_sysdata/restore.sh
@@ -199,19 +207,19 @@ case "$option" in
     restoreSysData=false
 
     case "$option $*" in
-      *--magisk*|-rm*|-r?m*|-r??m*|-r???m*) restoreMagiskData=true;;
+      *--magisk*|-rm\ *|-r?m\ *|-r??m\ *|-r???m\ *) restoreMagiskData=true;;
     esac
 
     case "$option $*" in
-      *--old*|-ro*|-r?o*|-r??o*|-r???o*) bkpDir=${bkpDir}.old;;
+      *--old*|-ro\ *|-r?o\ *|-r??o\ *|-r???o\ *) bkpDir=${bkpDir}.old;;
     esac
 
     case "$option $*" in
-      *--settings*|-rs*|-r?s*|-r??s*|-r???s*) restoreSettings=true;;
+      *--settings*|-rs\ *|-r?s\ *|-r??s\ *|-r???s\ *) restoreSettings=true;;
     esac
 
     case "$option $*" in
-      *--sysdata*|-rS*|-r?S*|-r??S*|-r???S*) restoreSysData=true;;
+      *--sysdata*|-rS\ *|-r?S\ *|-r??S\ *|-r???S\ *) restoreSysData=true;;
     esac
 
     set -x
@@ -290,13 +298,23 @@ case "$option" in
             }
           done
         }
+
         # restore Settings.Secure.ANDROID_ID (SSAID)
-        # grep -q $pkg $bkpDir/_sysdata/settings_ssaid.xml && {
-        #   # launch app
-        #   pm suspend $pkg 2>/dev/null || pm disable $pkg
-        #   echo "pm unsuspend $pkg 2>/dev/null || pm enable $pkg" >> ${bkpDir%/*}/enable-ssaid-apps.sh
-        #   # restore ssaid
-        # }
+        ssaid_xml_bkp=$bkpDir/_sysdata/settings_ssaid.xml
+        grep -q $pkg $ssaid_xml_bkp && {
+          monkey -p $pkg -c android.intent.category.LAUNCHER 1 # starts $pkg to register its SSAID
+          killall $pkg > /dev/null 2>&1
+          pm suspend $pkg 2>/dev/null || pm disable $pkg
+          echo "pm unsuspend $pkg 2>/dev/null || pm enable $pkg" >> $ssaid_boot_script
+          old_ssaid_line=($(grep $pkg $ssaid_xml_bkp))
+          new_ssaid_line=($(grep $pkg $ssaid_xml))
+          new_ssaid_line[3]="${old_ssaid_line[3]}"
+          new_ssaid_line[5]="${old_ssaid_line[5]}"
+          sed -e "s|${new_ssaid_line[3]}|${old_ssaid_line[3]}|" -e "s|${new_ssaid_line[5]}|${old_ssaid_line[5]}|" \
+            $(test -f $ssaid_xml_tmp && echo $ssaid_xml_tmp || echo $ssaid_xml) > ${ssaid_xml_tmp}.tmp
+          mv -f ${ssaid_xml_tmp}.tmp $ssaid_xml_tmp
+          ssaid=true
+        }
       }
 
       # restore data
@@ -320,11 +338,24 @@ case "$option" in
       #[[ -d "$pkg" && $pkg != */*]] && rm -rf $pkg
 
     done
+
+    test -f $ssaid_xml_tmp && {
+      cat $ssaid_xml_tmp > $ssaid_xml
+      rm $ssaid_xml_tmp
+    }
+  ;;
+
+
+  *-s*) # enable apps with Settings.Secure.ANDROID_ID (SSAID)
+    test -f $ssaid_boot_script && {
+      . $ssaid_boot_script
+      rm $ssaid_boot_script
+    }
   ;;
 
 
   *) # help text
-    echo "Migrator v2020.6.24-beta (202006240)
+    echo "Migrator v2020.6.25-beta (202006250)
 Android Backup Solution and ROM Migration Utility
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+
@@ -343,6 +374,7 @@ Options
   -i|--import [source directory]
   -l|--list [egrep options] [\"regex\"]
   -r[mosS]|--restore [--magisk] [--old] [--settings] --sysdata [egrep options] [\"regex\"]
+  -s|--ssaid
 
 Note
   [egrep options] [\"regex\"] is for matching user pkgs only.
@@ -366,9 +398,10 @@ Examples
   ${0##*/} -rS -v . (restore ONLY system data)
   ${0##*/} -rm -v . (restore ONLY magisk data)
   ${0##*/} -rmsS (restore everything)
+  ${0##*/} -s (enable apps with Settings.Secure.ANDROID_ID (SSAID) after rebooting)
 
 
-Migrator can backup/restore apps (including split APKs), respective data and runtime permissions.
+Migrator can backup/restore apps (including split APKs and SSAIDs), respective data and runtime permissions.
 
 Everything in /data/adb/, except magisk/ is considered \"Magisk data\".
 This data is not backed up nor restored by default (requires dedicated options; see examples).
@@ -376,8 +409,8 @@ After restore, you have to launch Magisk Manager and disable or remove all modul
 
 Android settings and system data (accounts, ADB keys, Bluetooth, com.android.*provider*, user picture, wallpaper, WiFi, XPrivacyLua) are always included in backups, but never restored automatically with apps (requires dedicated options; see examples).
 
-Accounts, call logs, contacts and SMS/MMS data restore is not fully guaranteed.
-These are stored in complex databases and the files are found in variable locations.
+Accounts, call logs, contacts and SMS/MMS, other telephony and misc system .db data restore is not fully guaranteed.
+These are complex databases and the files are often found in variable locations.
 Thus, you may want to export your contacts to a vCard file or use a third-party app to backup/restore all telephony data.
 
 Backups of uninstalled apps are automatically removed just before new backups start.
@@ -434,7 +467,8 @@ ROM Migration Steps
 4. Launch NetHunter Terminal (bundled), select \"AndroidSu\" shell and run \"M -rmsS\" or \"/dev/M -rmsS\" to restore everything.
 5. Launch Magisk Manager and disable/remove all modules that are or may be incompatible with the [new] ROM.
 6. Reboot.
-7. If you face Bluetooth and/or WiFi issues, either reset network settings or remove the respective configuration files (see above).
+7. Run ${0##*/} -s to enable apps with Settings.Secure.ANDROID_ID (SSAID).
+8. If you face Bluetooth and/or WiFi issues, either reset network settings or remove the respective configuration files (see above).
 
 EXTRAS are system packages (full names).
 
@@ -445,7 +479,9 @@ Busybox and extra binaries can be placed in /data/adb/bin/.
 
 The default compression program (lzop) can be overridden by placing the desired replacement (or a symlink to it) in that location.
 e.g., \"mkdir -p /data/adb/bin; ln -s /system/xbin/pigz /data/adb/bin/lzop\"
-The file extension will remain .tar.lzo, though." | more
+The file extension will remain .tar.lzo, though.
+
+The Magisk module automates \"${0##*/} --ssaid\"." | more
   ;;
 esac
 exit 0
