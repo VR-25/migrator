@@ -1,6 +1,6 @@
 id=migrator
 name=Migrator
-version=v2020.6.25-beta
-versionCode=202006250
+version=v2020.6.26-beta
+versionCode=202006260
 author=VR25 (patreon.com/vr25)
 description=Migrator is a backup solution and ROM migration utility for Android. It can backup/restore apps (including split APKs and SSAIDs) with respective data and runtime permissions, system and Magisk data (including settings). ZERO warranties, use at your own risk! Refer to "migrator --help" or "M -h". If these executables aren't readily available (before a reboot), use "/dev/migrator" or "/dev/M".

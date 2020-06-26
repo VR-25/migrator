@@ -56,11 +56,12 @@ sysdata="/data/system_?e/0/accounts_?e.db*
 /data/misc/adb/adb_keys
 /data/misc/bluedroid/bt_config.conf
 /data/misc/wifi/WifiConfigStore.xml
-/data/misc/wifi softap.conf
+/data/misc/wifi/softap.conf
 /data/system/xlua/xlua.db*
 /data/system/users/0/photo.png
 /data/system/users/0/wallpaper*
-/data/user*/0/com.android.*provider*/databases/*.db*"
+/data/user*/0/com.android.*provider*/databases/*.db*
+/data/system/deviceidle.xml"
 
 
 case "$option" in
@@ -90,6 +91,8 @@ case "$option" in
         IFS=$'\n'
         for i in $(ls -1d /data/adb/* /data/adb/.* 2>/dev/null | grep -v /data/adb/magisk); do
           cp -dlR "$i" $bkpDir/_magisk/
+          find "$i" -print0 2>/dev/null | xargs -0 -n 10 stat -c "chown %U:%G %n; chmod %a %n" \
+            >> $bkpDir/_magisk/restore-attributes.sh
         done
         unset IFS
         set +x
@@ -120,7 +123,7 @@ case "$option" in
 
       # backup app
       mkdir $bkpDir/$pkg
-      cp -l /data/app/${pkg}-*/*.apk $bkpDir/$pkg/ 2>/dev/null
+      ln /data/app/${pkg}-*/*.apk $bkpDir/$pkg/ 2>/dev/null
 
       # backup data
       killall -STOP $pkg > /dev/null 2>&1
@@ -130,6 +133,8 @@ case "$option" in
         | grep -Ev '/app_tmp|/cache$|/code_cache$|/dex$|/lib$|oat$')
       do
         cp -dlR "$i" $bkpDir/$pkg/$pkg/
+        find "$i" -print0 2>/dev/null | xargs -0 -n 10 stat -c "chmod %a %n" \
+          >> $bkpDir/$pkg/restore-modes.sh
       done
       unset IFS
 
@@ -157,12 +162,11 @@ case "$option" in
 
     # backup system data
     mkdir $bkpDir/_sysdata
-    cp -l $ssaid_xml $bkpDir/_sysdata/ 2>/dev/null
+    ln $ssaid_xml $bkpDir/_sysdata/ 2>/dev/null
     for i in $sysdata; do
       ls $i > /dev/null 2>&1 || continue
-      cp -l $i $bkpDir/_sysdata/
-      stat -c "rm %n 2>/dev/null; cp -l $bkpDir/_sysdata/${i##*/} %n; chown %U:%G %n; \
-        chmod %a %n; /system/bin/restorecon %n" $i >> $bkpDir/_sysdata/restore.sh
+      ln $i $bkpDir/_sysdata/
+      stat -c "rm %n 2>/dev/null; ln $bkpDir/_sysdata/${i##*/} %n; chown %U:%G %n; chmod %a %n; /system/bin/restorecon %n" $i >> $bkpDir/_sysdata/restore.sh
     done
   ;;
 
@@ -258,15 +262,15 @@ case "$option" in
 
     $restoreMagiskData && {
       IFS=$'\n'
-      for i in $(ls -1d $bkpDir/_magisk/* $bkpDir/_magisk/.*); do
+      for i in $(ls -1d $bkpDir/_magisk/* $bkpDir/_magisk/.* | grep -v '/restore-attributes.sh$'); do
         rm -rf "/data/adb/${i##*/}"
         cp -dlR "$i" /data/adb/
       done 2>/dev/null
       unset IFS
-
+      set +x
+      . $bkpDir/_magisk/restore-attributes.sh
+      set -x
       for i in $(ls -1d /data/adb/* /data/adb/.* | grep -v /data/adb/magisk); do
-        chown -R 0:0 $i
-        chmod -R 0755 $i
         chcon -R u:object_r:system_file:s0 $i
       done
     } 2>/dev/null
@@ -288,13 +292,13 @@ case "$option" in
         # base APK
         pm install -r $pkg/base.apk || continue
         rm $pkg/base.apk
-        cp -l /data/app/${pkg}-*/base.apk $pkg/
+        ln /data/app/${pkg}-*/base.apk $pkg/
         # split APKs
         ls $pkg/split_*.apk > /dev/null 2>&1 && {
           for pkg_ in $pkg/split_*.apk; do
             pm install -r -p $pkg $pkg_ && {
               rm $pkg_
-              cp -l /data/app/${pkg}-*/${pkg_##*/} $pkg/
+              ln /data/app/${pkg}-*/${pkg_##*/} $pkg/
             }
           done
         }
@@ -303,6 +307,9 @@ case "$option" in
         ssaid_xml_bkp=$bkpDir/_sysdata/settings_ssaid.xml
         grep -q $pkg $ssaid_xml_bkp && {
           monkey -p $pkg -c android.intent.category.LAUNCHER 1 # starts $pkg to register its SSAID
+          until grep -q $pkg $ssaid_xml; do
+            sleep 1
+          done
           killall $pkg > /dev/null 2>&1
           pm suspend $pkg 2>/dev/null || pm disable $pkg
           echo "pm unsuspend $pkg 2>/dev/null || pm enable $pkg" >> $ssaid_boot_script
@@ -319,24 +326,32 @@ case "$option" in
 
       # restore data
       libDir=$(readlink /data/data/$pkg/lib)
-      set -- $(ls -dn /data/data/$pkg)
-      [ -n "$pkg" ] && rm -rf /data/data/$pkg 2>/dev/null
-      cp -dlR $pkg/$pkg /data/data/
+      attributes=($(stat -c "%u:%g %a" /data/data/$pkg))
+      rm -rf /data/data/${pkg:-_FAIL_} 2>/dev/null
+      if touch /data/._$pkg && ln /data/._$pkg /data/data/$pkg 2>/dev/null; then
+        rm /data/data/$pkg
+        cp -dlR $pkg/$pkg /data/data/
+      else
+        cp -dR $pkg/$pkg /data/data/ && {
+          rm -rf ${pkg:-_FAIL_}/$pkg
+          cp -dlR /data/data/$pkg $pkg/
+        }
+      fi
+      rm /data/._$pkg
       test -n "$libDir" && ln -sf $libDir /data/data/$pkg/lib
 
       # restore attributes
-      chown -R $3:$4 /data/data/$pkg
-      chmod -R 0775 /data/data/$pkg
+      chown -R ${attributes[0]} /data/data/$pkg
+      chmod ${attributes[1]} /data/data/$pkg
+      set +x
+      . $pkg/restore-modes.sh 2>/dev/null
+      set -x
       /system/bin/restorecon -R /data/data/$pkg
 
       # restore runtime permissions
       for perm in $(cat $pkg/runtime-perms.txt); do
         pm grant $pkg $perm
       done
-
-      # clean up
-      #[[ -d "$pkg" && $pkg != */*]] && rm -rf $pkg
-
     done
 
     test -f $ssaid_xml_tmp && {
@@ -347,7 +362,14 @@ case "$option" in
 
 
   *-s*) # enable apps with Settings.Secure.ANDROID_ID (SSAID)
+    set -x
     test -f $ssaid_boot_script && {
+      until test -d /sdcard/?ndroid \
+        -a .$(getprop sys.boot_completed 2>/dev/null) == .1 \
+        && pm list packages -s > /dev/null 2>&1
+      do
+        sleep 10
+      done
       . $ssaid_boot_script
       rm $ssaid_boot_script
     }
@@ -355,7 +377,7 @@ case "$option" in
 
 
   *) # help text
-    echo "Migrator v2020.6.25-beta (202006250)
+    echo "Migrator v2020.6.26-beta (202006260)
 Android Backup Solution and ROM Migration Utility
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+
@@ -446,7 +468,7 @@ The homepage is https://store.nethunter.com/en/packages/com.offsec.nhterm .
 You can always compare the package signatures and/or checksums.
 
 System data
-  /data/system_?e/accounts_?e.db*
+  /data/system_?e/0/accounts_?e.db*
   /data/misc/adb/adb_keys
   /data/misc/bluedroid/bt_config.conf
   /data/misc/wifi/WifiConfigStore.xml
@@ -455,6 +477,7 @@ System data
   /data/system/users/0/photo.png
   /data/system/users/0/wallpaper*
   /data/user*/0/com.android.*provider*/databases/*.db*
+  /data/system/deviceidle.xml
 
 Should you face any Bluetooth/Wi-Fi issues after data restore, just remove the respective configuration files and reboot or simply reset network settings.
 

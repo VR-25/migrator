@@ -14,6 +14,20 @@ It can be exported to a file: `M -h > file`
 If these executables aren't readily available (before a reboot), use `/dev/migrator` or `/dev/M`.
 
 
+v2020.6.26-beta (202006260)
+
+Backup app data modes (ditch hard-coded values).
+Backup battery optimization whitelist (deviceidle.xml) as part of system data.
+Backup Magisk data modes and ownership.
+Fixed wifi hotspot settings backup not working.
+General optimizations
+Perform stricter safety checks during SSAIDs restore.
+
+WARNING
+  This version will fail to restore data backed up with previous versions.
+  Use the backup creator (backed itself up too): `/data/media/migrator/bkp*/migrator.sh`.
+
+
 v2020.6.25-beta (202006250)
 
 Restore app specific Android IDs.
@@ -29,12 +43,3 @@ Fixed mkdir issue.
 Backup app specific Android IDs. Restore is WIP.
 More modular system data backup method
 Use `more` instead of `less` (buggy scrolling) for displaying the help text.
-
-
-v2020.6.22-beta (202006220)
-
-Exclude code_cache/ from app data backups.
-Fixed app data lib symlink issue.
-General optimizations
-Refresh APK snapshots after successful restore.
-Updated help text.
