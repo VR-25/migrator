@@ -1,6 +1,5 @@
 encryption
 
-export backups individually
-  implies -b if package has not been backed up
-
 backup only app|data
+
+remove exiting ssaid line

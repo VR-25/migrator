@@ -2,4 +2,5 @@
 # enable apps with Settings.Secure.ANDROID_ID (SSAID)
 
 modDir=${0%/*}
-$modDir/system/bin/migrator --ssaid
+start-stop-daemon -bx $modDir/system/bin/migrator -S -- --ssaid
+exit 0
