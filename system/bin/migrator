@@ -61,7 +61,7 @@ sysdata="/data/system_?e/0/accounts_?e.db*
 
 
 parse_params() {
-  compressor="$lzop $1"
+  compressor="lzop $1"
   dir=/sdcard/migrator
   regex=..
   shift
@@ -163,6 +163,10 @@ case "$option" in
       done
       unset IFS
 
+      # backup SSAID
+      grep -q $pkg $ssaid_xml 2>/dev/null \
+        && grep $pkg $ssaid_xml > $bkpDir/$pkg/ssaid.txt
+
       # ensure restored $pkg can use Google Clould Messaging
       rm -f $bkpDir/$pkg/$pkg/shared_prefs/com.google.android.gms.appid.xml 2>/dev/null
 
@@ -187,7 +191,6 @@ case "$option" in
 
     # backup system data
     mkdir $bkpDir/_sysdata
-    ln $ssaid_xml $bkpDir/_sysdata/ 2>/dev/null
     for i in $sysdata; do
       ls $i > /dev/null 2>&1 || continue
       ln $i $bkpDir/_sysdata/
@@ -312,9 +315,8 @@ case "$option" in
     ls -d $bkpDir/* > /dev/null && cd $bkpDir || exit $?
 
     # set the stage for ssaid restore
-    ssaid_xml_bkp=$bkpDir/_sysdata/settings_ssaid.xml
-    test -f $ssaid_xml_bkp && {
-      id=$(grep -Eo 'id=.*name=' $ssaid_xml_bkp | grep -Eo '[0-9]+' | sort -n | tail -n 1)
+    test -f $ssaid_xml && ls */ssaid.txt > /dev/null 2>&1 && {
+      id=$(grep -Eo 'id=.*name=' $ssaid_xml | grep -Eo '[0-9]+' | sort -n | tail -n 1)
       grep -v '</settings>' $ssaid_xml > $ssaid_xml_tmp
     }
 
@@ -350,12 +352,12 @@ case "$option" in
 
       # restore Settings.Secure.ANDROID_ID (SSAID)
       test -d /data/data/${pkg:-_FAIL_} || continue
-      test -f $ssaid_xml && grep -q $pkg $ssaid_xml_bkp && {
+      test -f $ssaid_xml -a -f $pkg/ssaid.txt && {
         ssaid=true
         killall $pkg > /dev/null 2>&1
         pm suspend $pkg 2>/dev/null || pm disable $pkg
         echo "pm unsuspend $pkg 2>/dev/null || pm enable $pkg" >> $ssaid_boot_script
-        ssaid_line=($(grep $pkg $ssaid_xml_bkp))
+        ssaid_line=($(cat $pkg/ssaid.txt))
         id=$(( id + 1 ))
         ssaid_line[1]="id=\"$id\""
         ssaid_line[2]="name=\"$(stat -c %u /data/data/$pkg)\""
@@ -475,7 +477,7 @@ case "$option" in
     TMPDIR=/dev
     cd $TMPDIR
     cat <<EOF | more
-Migrator v2020.6.29-beta (202006290)
+Migrator v2020.6.29-beta.1 (202006291)
 Android Backup Solution and ROM Migration Utility
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+

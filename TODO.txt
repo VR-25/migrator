@@ -1,5 +1,3 @@
 encryption
 
 backup only app|data
-
-remove exiting ssaid line
