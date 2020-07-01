@@ -6,18 +6,31 @@
 
 
 echo
-option=$1
+param1=$1
 [ -n "$1" ] && shift
 
 set -u
 unset IFS
 umask 0077
 
+
 ssaid=false
-bkpDir=/data/media/migrator/bkp
+bkp_dir=/data/media/migrator/local
+imports_dir=${bkp_dir%/*}/imported
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 ssaid_xml=/data/system/users/0/settings_ssaid.xml
-ssaid_boot_script=${bkpDir%/*}/enable-ssaid-apps.sh
+ssaid_boot_script=${bkp_dir%/*}/enable-ssaid-apps.sh
+
+sysdata="/data/system_?e/0/accounts_?e.db*
+/data/misc/adb/adb_keys
+/data/misc/bluedroid/bt_config.conf
+/data/misc/wifi/WifiConfigStore.xml
+/data/misc/wifi/softap.conf
+/data/system/xlua/xlua.db*
+/data/system/users/0/photo.png
+/data/system/users/0/wallpaper*
+/data/user*/0/com.android.*provider*/databases/*.db*
+/data/system/deviceidle.xml"
 
 
 # temporarily disable SELinux
@@ -48,18 +61,6 @@ trap '[ $sestatus != Permissive ] && setenforce 1; set +x; $ssaid && \
 export PATH=/data/adb/bin:/dev/.busybox:$PATH
 
 
-sysdata="/data/system_?e/0/accounts_?e.db*
-/data/misc/adb/adb_keys
-/data/misc/bluedroid/bt_config.conf
-/data/misc/wifi/WifiConfigStore.xml
-/data/misc/wifi/softap.conf
-/data/system/xlua/xlua.db*
-/data/system/users/0/photo.png
-/data/system/users/0/wallpaper*
-/data/user*/0/com.android.*provider*/databases/*.db*
-/data/system/deviceidle.xml"
-
-
 parse_params() {
   compressor="lzop $1"
   dir=/sdcard/migrator
@@ -85,133 +86,152 @@ parse_params() {
       ;;
     esac
   done
-  extension=.tar.${compressor%\ *}
+  extension=.tar.${compressor% *}
 }
 
 
-case "$option" in
+all=false
+[[ $param1 == -? || $param1 == -?i || $param1 == -?*A* || "$@" == *--all* ]] && all=true
+
+
+case "$param1" in
 
   *-b*) # backup
 
     params="$@"
-    extras="${params#* + }"
-    params="${params% + *}"
-    extras="${extras#$params}"
+    [[ "$@" == *+* ]] && extras="${params##* +}" || extras=
+    params="${params%% +*$extras}"
+    extras="${extras##$params}"
+
     set -- $params
+    regex="$params"
 
-    pkgList_="$(pm list packages -3 || exit 1)"
-    pkgList_="${pkgList_//package:}"
+    for i in app data magisk settings sysdata; do
+      regex="${regex/--$i}"
+    done
 
-    # preserve most recent backup
-    rm -rf ${bkpDir}.old 2>/dev/null
-    mv $bkpDir ${bkpDir}.old 2>/dev/null
-    mkdir -p $bkpDir
+    regex="${regex// }"
+    [[ "@" == *-v* ]] && v=v || v=
+    pkg_list_="$(pm list packages -3 || exit $?)"
+    pkg_list_="${pkg_list_//package:}"
+    pkg_list="$(echo "$pkg_list_" | grep -v com.offsec.nhterm | grep -E$v "${regex:-..}")"
 
-    # backup magisk data
-    case $option${1-} in
-      -bm*|*--magisk)
-        set -x
-        mkdir $bkpDir/_magisk
-        test ${1:-.} == --magisk && shift
-        IFS=$'\n'
-        for i in $(ls -1d /data/adb/* /data/adb/.* 2>/dev/null | grep -v /data/adb/magisk); do
-          cp -dlR "$i" $bkpDir/_magisk/
-          find "$i" -print0 2>/dev/null | xargs -0 -n 10 stat -c "chown %U:%G %n; chmod %a %n" \
-            >> $bkpDir/_magisk/restore-attributes.sh
-        done
-        unset IFS
-        set +x
-      ;;
-    esac
-
-    pkgList="$(echo "$pkgList_" | grep -v com.offsec.nhterm | grep -E "${@:-..}")"
+    unset params regex
+    mkdir -p $bkp_dir
 
     # remove backups of uninstalled apps
-    for pkg in $(ls -1d $bkpDir/* ${bkpDir}.old/* 2>/dev/null \
+    for pkg in $(ls -1d $bkp_dir/* 2>/dev/null \
       | grep -Ev '/_magisk$|/migrator.sh$|/_settings$|/_sysdata$')
     do
-      case "$pkgList_" in
+      case "$pkg_list_" in
         *${pkg##*/}*) :;;
         *) rm -rf $pkg;;
       esac
     done
-    unset pkgList_
+    unset pkg_list_
 
     test -f /data/system/users/0/runtime-permissions.xml \
-      && bkpRuntimePerms=true \
-      || bkpRuntimePerms=false
+      && bkp_runtime_perms=true \
+      || bkp_runtime_perms=false
     set -x
 
-    for pkg in $pkgList $extras; do
+    for pkg in $pkg_list $extras; do
 
       test -d /data/data/$pkg || continue
+      mkdir $bkp_dir/$pkg
 
       # backup app
-      mkdir $bkpDir/$pkg
-      ln /data/app/${pkg}-*/*.apk $bkpDir/$pkg/ 2>/dev/null
+      [[ $all == true || $param1 == -b*a* || "$@" == *--app* ]] && {
+        rm $bkp_dir/$pkg/*.apk
+        ln /data/app/${pkg}-*/*.apk $bkp_dir/$pkg/
+      } 2>/dev/null
 
       # backup data
-      killall -STOP $pkg > /dev/null 2>&1
-      mkdir $bkpDir/$pkg/$pkg
-      IFS=$'\n'
-      for i in $(ls -1d /data/data/$pkg/* /data/data/$pkg/.* 2>/dev/null \
-        | grep -Ev '/app_tmp|/cache$|/code_cache$|/dex$|/lib$|oat$')
-      do
-        cp -dlR "$i" $bkpDir/$pkg/$pkg/
-        find "$i" -print0 2>/dev/null | xargs -0 -n 10 stat -c "%a %n" \
-          >> $bkpDir/$pkg/modes.txt
-      done
-      unset IFS
+      [[ $all == true || $param1 == -b*d* || "$@" == *--data* ]] && {
+        killall -STOP $pkg > /dev/null 2>&1
+        rm -rf $bkp_dir/$pkg/$pkg 2>/dev/null
+        mkdir $bkp_dir/$pkg/$pkg
+        IFS=$'\n'
+        for i in $(ls -1d /data/data/$pkg/* /data/data/$pkg/.* 2>/dev/null \
+          | grep -Ev '/app_tmp|/cache$|/code_cache$|/dex$|/lib$|oat$')
+        do
+          cp -dlR "$i" $bkp_dir/$pkg/$pkg/
+          find "$i" -print0 2>/dev/null | xargs -0 -n 10 stat -c "%a %n" \
+            >> $bkp_dir/$pkg/modes.txt
+        done
+        unset IFS
 
-      # backup SSAID
-      grep -q $pkg $ssaid_xml 2>/dev/null \
-        && grep $pkg $ssaid_xml > $bkpDir/$pkg/ssaid.txt
+        # backup SSAID
+        grep -q $pkg $ssaid_xml 2>/dev/null \
+          && grep $pkg $ssaid_xml > $bkp_dir/$pkg/ssaid.txt
 
-      # ensure restored $pkg can use Google Clould Messaging
-      rm -f $bkpDir/$pkg/$pkg/shared_prefs/com.google.android.gms.appid.xml 2>/dev/null
+        # ensure restored $pkg can use Google Clould Messaging
+        rm -f $bkp_dir/$pkg/$pkg/shared_prefs/com.google.android.gms.appid.xml 2>/dev/null
+      }
 
       # backup runtime permissions
-      $bkpRuntimePerms && {
+      $bkp_runtime_perms && {
         sed -n "/$pkg/,/\<\//p" /data/system/users/0/runtime-permissions.xml \
           | grep 'granted=\"true\"' \
-          | grep -o 'android.permission.*[A-Z]' > $bkpDir/$pkg/runtime-perms.txt
+          | grep -o 'android.permission.*[A-Z]' > $bkp_dir/$pkg/runtime-perms.txt
       }
       killall -CONT $pkg > /dev/null 2>&1
 
     done
 
     # backup migrator itself
-    cp $(readlink -f "$0") $bkpDir/migrator.sh
+    cp $(readlink -f "$0") $bkp_dir/migrator.sh
 
     # backup Android settings
-    mkdir $bkpDir/_settings
-    settings list global > $bkpDir/_settings/global.txt
-    settings list secure > $bkpDir/_settings/secure.txt
-    settings list system > $bkpDir/_settings/system.txt
+    [[ $all == true || $param1 == -b*s* || "$@" == *--settings* ]] && {
+      rm -rf $bkp_dir/_settings 2>/dev/null
+      mkdir $bkp_dir/_settings
+      settings list global > $bkp_dir/_settings/global.txt
+      settings list secure > $bkp_dir/_settings/secure.txt
+      settings list system > $bkp_dir/_settings/system.txt
+    }
 
     # backup system data
-    mkdir $bkpDir/_sysdata
-    for i in $sysdata; do
-      ls $i > /dev/null 2>&1 || continue
-      ln $i $bkpDir/_sysdata/
-      stat -c "rm %n 2>/dev/null; ln $bkpDir/_sysdata/${i##*/} %n; chown %U:%G %n; chmod %a %n; /system/bin/restorecon %n" $i >> $bkpDir/_sysdata/restore.sh
-    done
+    [[ $param1 == -b*S* || "$@" == *--sysdata* ]] && {
+      rm -rf $bkp_dir/_sysdata 2>/dev/null
+      mkdir $bkp_dir/_sysdata
+      for i in $sysdata; do
+        ls $i > /dev/null 2>&1 || continue
+        ln $i $bkp_dir/_sysdata/
+        stat -c "rm %n 2>/dev/null; ln $bkp_dir/_sysdata/${i##*/} %n; chown %U:%G %n; chmod %a %n; /system/bin/restorecon %n" $i >> $bkp_dir/_sysdata/restore.sh
+      done
+    }
+
+    # backup magisk data
+    [[ $param1 == -b*m* || "$@" == *--magisk* ]] && {
+      set -x
+      rm -rf $bkp_dir/_magisk; 2>/dev/null
+      mkdir $bkp_dir/_magisk
+      IFS=$'\n'
+      for i in $(ls -1d /data/adb/* /data/adb/.* 2>/dev/null | grep -v /data/adb/magisk); do
+        cp -dlR "$i" $bkp_dir/_magisk/
+        find "$i" -print0 2>/dev/null | xargs -0 -n 10 stat -c "chown %U:%G %n; chmod %a %n" \
+          >> $bkp_dir/_magisk/restore-attributes.sh
+      done
+      unset IFS
+      set +x
+    }
   ;;
 
 
   *-d*) # delete
     set -x
     [[ "$*" != */* ]] && {
-      cd $bkpDir && eval rm -rf "$@"
-      cd ${bkpDir}.old && eval rm -rf "$@"
+      cd $bkp_dir && eval rm -rf "$@"
+      cd $imports_dir && eval rm -rf "$@"
     } 2>/dev/null
   ;;
 
 
   *-e*) # export
     set -x
-    cd $bkpDir || exit $?
-    case $option in
+    cd $bkp_dir || exit $?
+    case $param1 in
       -*e*i) # interactive mode
         set +x
         clear
@@ -239,10 +259,10 @@ case "$option" in
 
   *-i*) # import
     set -x
-    mkdir -p ${bkpDir}.old
+    mkdir -p $imports_dir
     parse_params -cdv "$@"
     cd $dir || exit $?
-    case $option in
+    case $param1 in
       -*i*i*) # interactive mode
         set +x
         clear
@@ -258,61 +278,35 @@ case "$option" in
       ;;
     esac
     for bkp in $(ls -1 | grep -v '^migrator.sh$' | grep -E $regex); do
-      rm -rf ${bkpDir}.old/${bkp%.tar*} 2>/dev/null
-      $compressor $bkp | tar -xvf - -C ${bkpDir}.old
+      rm -rf $imports_dir/${bkp%.tar*} 2>/dev/null
+      $compressor $bkp | tar -xvf - -C $imports_dir
     done
-    cp -f migrator.sh ${bkpDir}.old/
+    cp -f migrator.sh $imports_dir/
   ;;
 
 
   *-l*) # list
-    echo $bkpDir
-    ls -1p $bkpDir 2>/dev/null | sed -En -e '/^migrator.sh/d' -e "/${@:-..}/s/^/  /p"
+    echo $bkp_dir
+    ls -1p $bkp_dir 2>/dev/null | sed -En -e '/^migrator.sh/d' -e "/${@:-..}/s/^/  /p"
     echo
-    echo ${bkpDir}.old
-    ls -1p ${bkpDir}.old 2>/dev/null | sed -En -e '/^migrator.sh/d' -e "/${@:-..}/s/^/  /p"
+    echo $imports_dir
+    ls -1p $imports_dir 2>/dev/null | sed -En -e '/^migrator.sh/d' -e "/${@:-..}/s/^/  /p"
   ;;
 
 
   *-r*) # restore
 
-    restoreMagiskData=false
-    restoreSettings=false
-    restoreSysData=false
-
-    case $option in
-      -rm*|-r?m*|-r??m*|-r???m*) restoreMagiskData=true;;
-    esac
-
-    case $option in
-      -ro*|-r?o*|-r??o*|-r???o*) bkpDir=${bkpDir}.old;;
-    esac
-
-    case $option in
-      -rs*|-r?s*|-r??s*|-r???s*) restoreSettings=true;;
-    esac
-
-    case $option in
-      -rS*|-r?S*|-r??S*|-r???S*) restoreSysData=true;;
-    esac
-
-    case "$*" in
-      *--magisk*) restoreMagiskData=true;;
-      *--old*) bkpDir=${bkpDir}.old;;
-      *--settings) restoreSettings=true;;
-      *--sysdata*) restoreSysData=true;;
-    esac
-
-    # remove obsolete positional parameters
-    for i in $(seq 4); do
-      case "${1-}" in
-        --magisk|--old|--settings|--sysdata) shift;;
-        *) break;;
-      esac
+    regex="$@"
+    for i in app data imported magisk settings sysdata; do
+      regex="${regex/--$i}"
     done
+    regex="${regex// }"
+
+    [[ "@" == *-v* ]] && v=v || v=
+    [[ $param1 == -r*i* || "$@" == *imported* ]] && bkp_dir=$imports_dir
 
     set -x
-    ls -d $bkpDir/* > /dev/null && cd $bkpDir || exit $?
+    ls -d $bkp_dir/* > /dev/null && cd $bkp_dir || exit $?
 
     # set the stage for ssaid restore
     test -f $ssaid_xml && ls */ssaid.txt > /dev/null 2>&1 && {
@@ -325,15 +319,14 @@ case "$option" in
     settings put global verifier_verify_adb_installs 0
     settings put global package_verifier_enable 0
 
-    for pkg in $(ls -1 $bkpDir 2>/dev/null \
+    for pkg in $(ls -1 $bkp_dir 2>/dev/null \
       | grep -Ev '^_magisk$|^migrator.sh$|^_settings$|^_sysdata$' \
-      | grep -E "${@:-..}")
+      | grep -E$v "${regex:-..}")
     do
 
-      killall $pkg > /dev/null 2>&1
 
       # restore app
-      test -f $pkg/base.apk && {
+      test -f $pkg/base.apk && [[ $all == true || $param1 == -r*a* || "$@" == *--app* ]] && {
         # base APK
         pm install -r $pkg/base.apk && {
           rm $pkg/base.apk
@@ -350,48 +343,52 @@ case "$option" in
         }
       }
 
-      # restore Settings.Secure.ANDROID_ID (SSAID)
       test -d /data/data/${pkg:-_FAIL_} || continue
-      test -f $ssaid_xml -a -f $pkg/ssaid.txt && {
-        ssaid=true
+
+      [[ $all == true || $param1 == -r*d* || "$@" == *--data* ]] && {
         killall $pkg > /dev/null 2>&1
-        pm suspend $pkg 2>/dev/null || pm disable $pkg
-        echo "pm unsuspend $pkg 2>/dev/null || pm enable $pkg" >> $ssaid_boot_script
-        ssaid_line=($(cat $pkg/ssaid.txt))
-        id=$(( id + 1 ))
-        ssaid_line[1]="id=\"$id\""
-        ssaid_line[2]="name=\"$(stat -c %u /data/data/$pkg)\""
-        sed -i /$pkg/d $ssaid_xml_tmp
-        echo "${ssaid_line[@]}" | sed 's/^/  /' >> $ssaid_xml_tmp
-      }
-
-      # restore data
-      libDir=$(readlink /data/data/$pkg/lib)
-      attributes=($(stat -c "%u:%g %a" /data/data/$pkg))
-      rm -rf /data/data/${pkg:-_FAIL_} 2>/dev/null
-      if touch /data/._$pkg && ln /data/._$pkg /data/data/$pkg 2>/dev/null; then
-        rm /data/data/$pkg
-        cp -dlR $pkg/$pkg /data/data/
-      else
-        cp -dR $pkg/$pkg /data/data/ && {
-          rm -rf ${pkg:-_FAIL_}/$pkg
-          cp -dlR /data/data/$pkg $pkg/
+        # restore Settings.Secure.ANDROID_ID (SSAID)
+        test -f $ssaid_xml -a -f $pkg/ssaid.txt && {
+          ssaid=true
+          killall $pkg > /dev/null 2>&1
+          pm suspend $pkg 2>/dev/null || pm disable $pkg
+          echo "pm unsuspend $pkg 2>/dev/null || pm enable $pkg" >> $ssaid_boot_script
+          ssaid_line=($(cat $pkg/ssaid.txt))
+          id=$(( id + 1 ))
+          ssaid_line[1]="id=\"$id\""
+          ssaid_line[2]="name=\"$(stat -c %u /data/data/$pkg)\""
+          sed -i /$pkg/d $ssaid_xml_tmp
+          echo "${ssaid_line[@]}" | sed 's/^/  /' >> $ssaid_xml_tmp
         }
-      fi
-      rm /data/._$pkg
-      test -n "$libDir" && ln -sf $libDir /data/data/$pkg/lib
 
-      # restore attributes
-      chown -R ${attributes[0]} /data/data/$pkg
-      chmod ${attributes[1]} /data/data/$pkg
-      test -f $pkg/modes.txt && {
-        while IFS= read -r line; do
-          set +x
-          chmod $line 2>/dev/null
-        done < $pkg/modes.txt
-        set -x
+        # restore data
+        libDir=$(readlink /data/data/$pkg/lib)
+        attributes=($(stat -c "%u:%g %a" /data/data/$pkg))
+        rm -rf /data/data/${pkg:-_FAIL_} 2>/dev/null
+        if touch /data/._$pkg && ln /data/._$pkg /data/data/$pkg 2>/dev/null; then
+          rm /data/data/$pkg
+          cp -dlR $pkg/$pkg /data/data/
+        else
+          cp -dR $pkg/$pkg /data/data/ && {
+            rm -rf ${pkg:-_FAIL_}/$pkg
+            cp -dlR /data/data/$pkg $pkg/
+          }
+        fi
+        rm /data/._$pkg
+        test -n "$libDir" && ln -sf $libDir /data/data/$pkg/lib
+
+        # restore attributes
+        chown -R ${attributes[0]} /data/data/$pkg
+        chmod ${attributes[1]} /data/data/$pkg
+        test -f $pkg/modes.txt && {
+          while IFS= read -r line; do
+            set +x
+            chmod $line 2>/dev/null
+          done < $pkg/modes.txt
+          set -x
+        }
+        /system/bin/restorecon -R /data/data/$pkg
       }
-      /system/bin/restorecon -R /data/data/$pkg
 
       # restore runtime permissions
       for perm in $(cat $pkg/runtime-perms.txt); do
@@ -406,13 +403,13 @@ case "$option" in
     }
 
     # restore Android settings
-    $restoreSettings && {
+    [[ $param1 == -r*s* || "$@" == *--settings* ]] && {
       settings_global="$(settings list global)"
       settings_secure="$(settings list secure)"
       settings_system="$(settings list system)"
 
       for namespace in global secure system; do
-        for setting in $(cat $bkpDir/_settings/$namespace.txt); do
+        for setting in $(cat $bkp_dir/_settings/$namespace.txt); do
           case "$(eval echo \"\$settings_$namespace\")" in
             *${setting%=*}=*)
               settings put $namespace ${setting%=*} "${setting#*=}"
@@ -423,30 +420,31 @@ case "$option" in
     }
 
     # restore system data
-    $restoreSysData && {
+    [[ $param1 == -r*S* || "$@" == *--sysdata* ]] && {
       mkdir /data/system/xlua 2>/dev/null && {
         chown 1000:1000 /data/system/xlua
         chmod 0770 /data/system/xlua
       }
-      test -f $bkpDir/_sysdata/restore.sh && {
+      test -f $bkp_dir/_sysdata/restore.sh && {
         while IFS= read -r line; do
           $line 2>/dev/null
-        done < $bkpDir/_sysdata/restore.sh
+        done < $bkp_dir/_sysdata/restore.sh
       }
     }
 
-    $restoreMagiskData && {
+    # restore magisk data
+    [[ $param1 == -r*m* || "$@" == *--magisk* ]] && {
       IFS=$'\n'
-      for i in $(ls -1d $bkpDir/_magisk/* $bkpDir/_magisk/.* | grep -v '/restore-attributes.sh$'); do
+      for i in $(ls -1d $bkp_dir/_magisk/* $bkp_dir/_magisk/.* | grep -v '/restore-attributes.sh$'); do
         rm -rf "/data/adb/${i##*/}"
         cp -dlR "$i" /data/adb/
       done 2>/dev/null
       unset IFS
-      test -f $bkpDir/_magisk/restore-attributes.sh && {
+      test -f $bkp_dir/_magisk/restore-attributes.sh && {
         while IFS= read -r line; do
           set +x
           $line 2>/dev/null
-        done < $bkpDir/_magisk/restore-attributes.sh
+        done < $bkp_dir/_magisk/restore-attributes.sh
         set -x
       }
       for i in $(ls -1d /data/adb/* /data/adb/.* | grep -v /data/adb/magisk); do
@@ -468,7 +466,7 @@ case "$option" in
       while IFS= read -r line; do
         $line 2>/dev/null
       done < $ssaid_boot_script
-      m $ssaid_boot_script
+      rm $ssaid_boot_script
     }
   ;;
 
@@ -477,7 +475,7 @@ case "$option" in
     TMPDIR=/dev
     cd $TMPDIR
     cat <<EOF | more
-Migrator v2020.6.29-beta.1 (202006291)
+Migrator v2020.7.1-beta.3 (202007013)
 Android Backup Solution and ROM Migration Utility
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+
@@ -489,12 +487,12 @@ This is still in beta. Backup your data before using.
 
 Usage
 
-  ${0##*/} <option> [arg ..]
+  ${0##*/} <option...> [arg...]
 
 
 Options
 
-  -b[m]|--backup [--magisk] [regex|-v regex] [+ extra pkgs (full names)]
+  -b[aAdmsS]|--backup [--app] [--all] [--data] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ extra pkgs (full names)]
 
   -d|--delete <"bkp name (wildcards supported)" ...>
 
@@ -504,20 +502,24 @@ Options
 
   -l|--list [regex|-v regex]
 
-  -r[mosS]|--restore [--magisk] [--old] [--settings] [--sysdata] [regex|-v regex]
+  -r[aAdimsS]|--restore [--app] [--all] [--data] [--imported] [--magisk] [--settings] [--sysdata] [regex|-v regex]
 
   -s|--ssaid
 
 
 Examples
 
-${0##*/} --backup "facebook.lite|instagram" (Facebook Lite and Instagram)
+${0##*/} --bad "ook.lite|instagram" (backup Facebook Lite and Instagram's APKs+data (ad or ba))
 
-${0##*/} -b . + com.android.vending com.android.inputmethod.latin (backup all user apps (dot), plus two system apps, excluding APKs outside /data/app/)
+${0##*/} -bad + com.android.vending com.android.inputmethod.latin (backup APKs (a) and data (d) of all user, plus two system apps, excluding APKs outside /data/app/)
 
-${0##*/} -bm -v . (backup settings, plus system and magisk (m) data; -v means exclude; dot means all apps)
+${0##*/} -bms (backup Magisk data (m) and generic Android settings (s))
 
-${0##*/} -bm (backup everything, except system apps)
+${0##*/} -bAmsS + \$(pm list packages -s | sed 's/^package://') (backup everything)
+
+${0##*/} -bAmsS (backup everything, except system apps)
+
+${0##*/} -bd (backup only users apps' data (d))
 
 ${0##*/} --delete \\* (all backups)
 
@@ -525,11 +527,9 @@ ${0##*/} -d "*facebook.lite*" "*instag*"
 
 ${0##*/} --export (all to /sdcard/migrator/)
 
-${0##*/} -e -d /storage/XXXX-XXXX/migrator (all to /storage/XXXX-XXXX/migrator/)
+${0##*/} -e -d /storage/XXXX-XXXX/migrator (export all to /storage/XXXX-XXXX/migrator/)
 
 ${0##*/} -ei (interactive --export)
-
-${0##*/} --exporti (same as above, notice the trailing "i")
 
 ${0##*/} --import (from /sdcard/migrator/)
 
@@ -541,35 +541,32 @@ ${0##*/} --list
 
 ${0##*/} -l facebook.lite
 
-${0##*/} --restore facebook.lite
+${0##*/} --restore --data facebook.lite
 
-${0##*/} --r --old facebook.lite (restore older backup)
+${0##*/} -r --imported --app --data facebook.lite
 
-${0##*/} -rs -v . (restore ONLY generic Android settings)
+${0##*/} -rs (restore generic Android settings)
 
-${0##*/} -rS -v . (restore ONLY system data)
+${0##*/} -rS (restore system data)
 
-${0##*/} -rm -v . (restore ONLY magisk data)
+${0##*/} -rm (restore magisk data)
 
-${0##*/} -rms (restore everything, except system data (-S, usually incompatible))
+${0##*/} -rAms (restore everything, except system data (S, usually incompatible))
 
 ${0##*/} -s (enable apps with Settings.Secure.ANDROID_ID (SSAID) after rebooting)
 
 
-Migrator can backup/restore apps (including split APKs and SSAIDs), respective data and runtime permissions.
+Migrator can backup/restore apps (a), respective data (d) and runtime permissions.
 
-Everything in /data/adb/, except magisk/ is considered "Magisk data".
-This data is not backed up nor restored by default (requires dedicated options; see examples).
-After restore, you have to launch Magisk Manager and disable or remove all modules that are or may be incompatible with the [new] ROM.
+Everything in /data/adb/, except magisk/ is considered "Magisk data" (m).
+After restoring such data, one has to launch Magisk Manager and disable/remove all modules that are or may be incompatible with the [new] ROM.
 
-Android settings and system data (accounts, ADB keys, Bluetooth, com.android.*provider*, user picture, wallpaper, WiFi, XPrivacyLua) are always included in backups, but never restored automatically with apps (requires dedicated options; see examples).
-
-Accounts, call logs, contacts and SMS/MMS, other telephony and system data restore is not fully guaranteed.
+Accounts, call logs, contacts and SMS/MMS, other telephony and system data (S) restore is not fully guaranteed.
 These are complex files and often found in variable locations.
-Thus, restoring them (-rS -v .) is not recommended.
+Thus, restoring them (-rS) is not a general recommendation.
 You may want to export contacts to a vCard file or use a third-party app to backup/restore all telephony data.
 
-Backups of uninstalled apps are automatically removed just before new backups start.
+Backups of uninstalled apps are automatically removed when a backup command is issued.
 
 For greater compatibility and safety, system apps are not backed up, unless specified as "extras" (see examples).
 No APK outside /data/app/ is ever backed up.
@@ -577,21 +574,21 @@ Data of specified system apps is always backed up.
 
 Migrator itself is included in backups and exported alongside backup archives.
 
-Two local backups are kept: $bkpDir and ${bkpDir}.old.
+Backups are stored in $bkp_dir/.
 
 These backups take virtually no extra storage space (hard links).
 
 Backups can be exported as compressed archives.
 The default export/import directory is /sdcard/migrator.
 "lzop -1v" is the default compression method.
-Method here refers to "program -options".
-Imported backups are stored in "/data/media/migrator/bkp.old".
+Method here refers to "<program> <options>".
+Imported backups are stored in "/data/media/migrator/imported/".
 
 The Magisk module variant installs NetHunter Terminal.
 Highly recommended, it's always excluded from backups.
-If you use another terminal, it must be excluded manually (e.g., "migrator --backup -v termux").
+If you use another terminal, it MUST BE EXCLUDED manually (e.g., "migrator -bad -v termux").
 This is because apps being backed up are temporarily suspended.
-Before restore, these are terminated.
+Before restore, they are terminated.
 Thus, not excluding the terminal that runs migrator will lead to incomplete backup/restore.
 
 Having a terminal ready out of the box also adds convenience.
@@ -605,18 +602,19 @@ You can always compare the package signatures and/or checksums.
 
 ROM Migration Steps
 
-1. Backup everything: "${0##*/} -bm . + com.android.vending EXTRAS".
+1. Backup everything: "M -bAmsS + com.android.vending EXTRAS".
 2. Recovery > install [new] ROM  (factory reset implied) + Magisk > reboot.
 3. Flash migrator from Magisk Manager (no reboot needed afterwards).
-4. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "M -rms" or "/dev/M -rms" to restore everything, except system data (-S, usually incompatible).
+4. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "M -rAms" or "/dev/M -rAms" to restore everything, except system data (-S, usually incompatible).
 5. Launch Magisk Manager and disable/remove all modules that are or may be incompatible with the [new] ROM.
 6. Reboot.
-7. Run "${0##*/} -s" to enable apps with Settings.Secure.ANDROID_ID (SSAID).
+7. Run "M -s" to enable apps with Settings.Secure.ANDROID_ID (SSAID).
 
 EXTRAS are system packages (full names).
+One can use "+ \$(pm list packages -s | sed 's/^package://')" to include all system apps' data and updated APKs (those in /data/app/).
 
 
-System Data
+System Data (S)
 
 /data/system_?e/0/accounts_?e.db*
 /data/misc/adb/adb_keys

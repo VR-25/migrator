@@ -6,14 +6,14 @@ extract_libs() {
 libDir=$MODPATH/system/app/com.offsec.nhterm/lib
 apk=$MODPATH/system/app/com.offsec.nhterm/com.offsec.nhterm.apk
 
-# extract NetHunter Terminal libraries
+# extract NetHunter Terminal's libraries
 case $ARCH in
   arm) extract_libs arm armeabi-v7a;;
   arm64) extract_libs arm64 arm64-v8a;;
   x86|x64) extract_libs x86;;
 esac
 
-# create alias
+# create migrator alias for lazy typing
 ln $MODPATH/system/bin/migrator $MODPATH/system/bin/M
 
 # make executables readily available
@@ -25,11 +25,14 @@ ln -fs $execFile /sbin
 ln -fs $execFile /sbin/M
 } 2>/dev/null && /system/bin/mount -o remount,ro /
 
+# remove leftovers
+rm $MODPATH/License.md $MODPATH/TODO.txt
+
 # set permissions
 set_perm_recursive $MODPATH 0 0 0755 0644
 set_perm_recursive $MODPATH/system/bin 0 0 0755 0755
 
-# install NetHunter Terminal
+# make NetHunter Terminal readily available
 if $BOOTMODE && ! test -d /data/data/com.offsec.nhterm; then
   sestatus=$(getenforce)
   setenforce 0

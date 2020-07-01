@@ -1,3 +1,1 @@
 encryption
-
-backup only app|data

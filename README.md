@@ -15,13 +15,22 @@ It can be exported to a file: `M -h > file`
 If these executables aren't readily available (before a reboot), use `/dev/migrator` or `/dev/M`.
 
 
-v2020.6.29-beta.1 (202006291)
+2020.7.1-beta.3 (202007013)
 
-Fixed "lzop, parameter not set" and SSAID related issues.
+Backups are no longer moved to bkp.old/.
+Major fixes & optimizations
+More flexible backup/restore options (e.g., app only, data only)
+New backups replace old ones.
+Updated help text.
 
 WARNING
 This version will fail to restore data backed up with previous versions.
 Use the backup creator (backed itself up too): `/data/media/migrator/bkp*/migrator.sh`.
+
+
+v2020.6.29-beta.1 (202006291)
+
+Fixed "lzop, parameter not set" and SSAID related issues.
 
 
 v2020.6.29-beta (202006290)
@@ -32,13 +41,3 @@ Automatic `M --ssaid` runs syncronously.
 Enhanced SSAID restore.
 Major fixes & optimizations
 Updated help text.
-
-
-v2020.6.26-beta (202006260)
-
-Backup app data modes (ditch hard-coded values).
-Backup battery optimization whitelist (deviceidle.xml) as part of system data.
-Backup Magisk data modes and ownership.
-Fixed wifi hotspot settings backup not working.
-General optimizations
-Perform stricter safety checks during SSAIDs restore.
