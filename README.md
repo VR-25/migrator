@@ -15,7 +15,18 @@ It can be exported to a file: `M -h > file`
 If these executables aren't readily available (before a reboot), use `/dev/migrator` or `/dev/M`.
 
 
-2020.7.1-beta.3 (202007013)
+v2020.7.1-beta.4 (202007014)
+
+General fixes & optimizations
+Backup/restore magisk data's SELinux contexts (ditch the hard-coded `u:object_r:system_file:s0`).
+Mark all restored apps as installed from Google Play Store.
+
+WARNING
+This version will fail to restore magisk data backed up with previous builds.
+Use the backup creator (backed itself up too): `/data/media/migrator/*/migrator.sh`.
+
+
+v2020.7.1-beta.3 (202007013)
 
 Backups are no longer moved to bkp.old/.
 Major fixes & optimizations
@@ -23,21 +34,7 @@ More flexible backup/restore options (e.g., app only, data only)
 New backups replace old ones.
 Updated help text.
 
-WARNING
-This version will fail to restore data backed up with previous versions.
-Use the backup creator (backed itself up too): `/data/media/migrator/bkp*/migrator.sh`.
-
 
 v2020.6.29-beta.1 (202006291)
 
 Fixed "lzop, parameter not set" and SSAID related issues.
-
-
-v2020.6.29-beta (202006290)
-
-`--export` and `--import` are more advanced and flexible. Refer to the help text for details.
-`--export` creates individual archives for each backup.
-Automatic `M --ssaid` runs syncronously.
-Enhanced SSAID restore.
-Major fixes & optimizations
-Updated help text.
