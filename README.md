@@ -12,17 +12,24 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.7.11-beta (202007110)
+
+Auto backup config suports a new parameter: cmd="post bkp cmd".
+Backup/restore apps' device-encrypted data as well (/data/user_de/0/<pkg>).
+General fixes & optimizations
+Replaced all instances of ${0##*/} with M in README.md.
+The sysdata list includes more Bluetooth and accounts configuration files.
+
+
 v2020.7.8-beta (202007080)
 
 Automatic backups (Magisk, init.d and Tasker flavors)
-Customizable first backup (after boot) delay (default: 60 minutes)
-/dev/migrator.log can be exported to /sdcard/migrator.log.bz2 with `M -L`.
 Major fixes & optimizations
 More comprehensive `--list`
 System data backup/restore sub-option is now D (formerly S).
 README.md has a copy of the help text.
 Updated documentation (ROM migration instructions, automatic backup configuration and more).
-Verbose is redirected to /dev/migrator.log.
+Verbose is redirected to /dev/migrator.log, which can be exported to /sdcard/migrator.log.bz2 with `M -L`.
 Works in recovery environments (particularly useful for emergency backups).
 
 
@@ -35,15 +42,6 @@ Mark all restored apps as installed from Google Play Store.
 WARNING
 This version will fail to restore magisk data backed up with previous builds.
 Use the backup creator (backed itself up too): `/data/media/migrator/*/migrator.sh`.
-
-
-v2020.7.1-beta.3 (202007013)
-
-Backups are no longer moved to bkp.old/.
-Major fixes & optimizations
-More flexible backup/restore options (e.g., app only, data only)
-New backups replace old ones.
-Updated help text.
 ```
 
 ---
@@ -76,7 +74,7 @@ This is still in beta. Backup your data before using.
 
 USAGE
 
-${0##*/} <option...> [arg...]
+M <option...> [arg...]
 
 
 OPTIONS
@@ -100,53 +98,53 @@ OPTIONS
 
 EXAMPLES
 
-${0##*/} -b "ook.lite|instagram" (backup Facebook Lite and Instagram's APKs+data)
+M -b "ook.lite|instagram" (backup Facebook Lite and Instagram's APKs+data)
 
-${0##*/} -b + com.android.vending com.android.inputmethod.latin (backup APKs and data of all user, plus two system apps, excluding APKs outside /data/app/)
+M -b + com.android.vending com.android.inputmethod.latin (backup APKs and data of all user, plus two system apps, excluding APKs outside /data/app/)
 
-${0##*/} -bms (backup Magisk data (m) and generic Android settings (s))
+M -bms (backup Magisk data (m) and generic Android settings (s))
 
-${0##*/} -bAmsD + \$(pm list packages -s | sed 's/^package://') (backup everything)
+M -bAmsD + \$(pm list packages -s | sed 's/^package://') (backup everything)
 
-${0##*/} -bAmsD (backup everything, except system apps)
+M -bAmsD (backup everything, except system apps)
 
-${0##*/} -bd (backup only users apps' data (d))
+M -bd (backup only users apps' data (d))
 
-${0##*/} --delete \\* (all backups)
+M --delete \\* (all backups)
 
-${0##*/} -d "*facebook.lite*" "*instag*"
+M -d "*facebook.lite*" "*instag*"
 
-${0##*/} --export (all to /sdcard/migrator/)
+M --export (all to /sdcard/migrator/)
 
-${0##*/} -e -d /storage/XXXX-XXXX/migrator (export all to /storage/XXXX-XXXX/migrator/)
+M -e -d /storage/XXXX-XXXX/migrator (export all to /storage/XXXX-XXXX/migrator/)
 
-${0##*/} -ei (interactive --export)
+M -ei (interactive --export)
 
-${0##*/} --import (from /sdcard/migrator/)
+M --import (from /sdcard/migrator/)
 
-${0##*/} -i -d /storage/XXXX-XXXX/migrator
+M -i -d /storage/XXXX-XXXX/migrator
 
-${0##*/} -ii -d /sdcard/m (interactive --import)
+M -ii -d /sdcard/m (interactive --import)
 
-${0##*/} --list
+M --list
 
-${0##*/} -l facebook.lite
+M -l facebook.lite
 
-${0##*/} --restore --data facebook.lite
+M --restore --data facebook.lite
 
-${0##*/} -r --imported --app --data facebook.lite
+M -r --imported --app --data facebook.lite
 
-${0##*/} -rs (restore generic Android settings)
+M -rs (restore generic Android settings)
 
-${0##*/} -rD (restore system data)
+M -rD (restore system data)
 
-${0##*/} -rm (restore magisk data)
+M -rm (restore magisk data)
 
-${0##*/} -rAms (restore everything, except system data (D, usually incompatible))
+M -rAms (restore everything, except system data (D, usually incompatible))
 
-${0##*/} -s (enable apps with Settings.Secure.ANDROID_ID (SSAID) after rebooting)
+M -s (enable apps with Settings.Secure.ANDROID_ID (SSAID) after rebooting)
 
-${0##*/} -L (export $log to /sdcard/migrator.log.bz2)
+M -L (export $log to /sdcard/migrator.log.bz2)
 
 
 Migrator can backup/restore apps (a), respective data (d) and runtime permissions.
@@ -204,30 +202,30 @@ AUTOMATING BACKUPS
 exit 0
 
 Config for Magisk and init.d
-Create "/data/migrator.conf" with "bkp="[sub options] [args]"", "freq=[hours]" and "delay=[minutes].
+Create "/data/migrator.conf" with "bkp="[sub options] [args]"", "cmd="post bkp cmd"", "freq=[hours]" and "delay=[minutes].
 e.g., "bkp=ADms; freq=24; delay=60" (defaults, used when \$config exists but is empty or values are null)
 The first backup starts \$delay minutes after boot.
 The config can be updated without rebooting.
-Changes take efect on the next loop iteration.
+Changes take efect in the next loop iteration.
 Logs are saved to "$log".
 Note: the config file is saved in /data and is not created automatically for obvious reasons. A factory reset wipes /data. After migrating to another ROM or performing a factory reset, you do not want your backups overwritten before the data is restored.
 
 Tasker or Similar
-"start-stop-daemon -bx ${0##*/} -S -- -bADms"
+"start-stop-daemon -bx M -S -- -bADms"
 If you don't have busybox installed system-wide, prepend it to the command line above.
-e.g., "/data/adb/magisk/busybox start-stop-daemon -bx ${0##*/} -S -- -bADms"
+e.g., "/data/adb/magisk/busybox start-stop-daemon -bx M -S -- -bADms"
 Logs are saved to "$log".
 
 
 ROM MIGRATION STEPS AND NOTES
 
-1. Backup everything, except system apps: "${0##*/} -bADms".
+1. Backup everything, except system apps: "M -bADms".
 
 2. Install the [new] ROM (factory reset implied), addons as desired - and root it.
 
 3. Once booted, flash Migrator from Magisk Manager (no reboot needed afterwards).
 
-4. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "${0##*/} -rAms" or "/dev/${0##*/} -rAms".
+4. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "M -rAms" or "/dev/M -rAms".
 
 5. Launch Magisk Manager and disable/remove all restored modules that are or may be incompatible with the [new] ROM.
 
