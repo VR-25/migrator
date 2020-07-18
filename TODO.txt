@@ -1,1 +1,3 @@
 encryption
+
+rm #legacy

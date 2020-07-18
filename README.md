@@ -12,6 +12,35 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.7.18-beta (202007180)
+
+General fixes & optimizations
+
+The default compression method is <none> (faster, output: .tar file). Method here refers to "<program> <options>" (e.g., "zstd -1v").
+The decompression/extraction method to use is automatically determined based on file extension (supported extensions: tar, tar.bz*, tar.gz* and tar.lzo*). The user can supply an alternate method for decompressing other archive types.
+
+--list shows install status as well.
+Option to restore only apps that are not installed: "-rn".
+Updated data migration tutorial and Tasker setup instructions - export/import to/from external storage included.
+
+Cleaner export/import interface.
+Export/import uncompressed archives (-c -).
+Fixed settings restore.
+
+Using /data/migrator/ as the new data directory. Android 10 complains when it's placed anywhere in /data/media/.
+$version is included in verbose.
+
+NOTE
+
+To restore backups from the old location, use the version that made such backups (/data/media/migrator/local/migrator.sh).
+Alternatively, you can move migrator's data folder to the new location (mv /data/media/migrator /data/).
+
+WARNING
+
+The ROM migration process has two additional steps to account for the new backup location.
+Failing to follow the instructions carefully will lead to data loss!
+
+
 v2020.7.11-beta (202007110)
 
 Auto backup config suports a new parameter: cmd="post bkp cmd".
@@ -31,17 +60,6 @@ README.md has a copy of the help text.
 Updated documentation (ROM migration instructions, automatic backup configuration and more).
 Verbose is redirected to /dev/migrator.log, which can be exported to /sdcard/migrator.log.bz2 with `M -L`.
 Works in recovery environments (particularly useful for emergency backups).
-
-
-v2020.7.1-beta.4 (202007014)
-
-General fixes & optimizations
-Backup/restore magisk data's SELinux contexts (ditch the hard-coded `u:object_r:system_file:s0`).
-Mark all restored apps as installed from Google Play Store.
-
-WARNING
-This version will fail to restore magisk data backed up with previous builds.
-Use the backup creator (backed itself up too): `/data/media/migrator/*/migrator.sh`.
 ```
 
 ---
@@ -68,13 +86,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --HELP
 
 ```
+Migrator v2020.7.18-beta (202007180)
+A Backup Solution and ROM Migration Utility for Android
+Copyright 2018-2020, VR25 (patreon.com/vr25)
+License: GPLv3+
+
+
 ZERO warranties, use at your own risk!
 This is still in beta. Backup your data before using.
 
 
 USAGE
 
-M <option...> [arg...]
+migrator <option...> [arg...]
 
 
 OPTIONS
@@ -83,9 +107,9 @@ OPTIONS
 
 -d|--delete <"bkp name (wildcards supported)" ...>
 
--e[i]|--export[i] [regex|-v regex] [-d|--dir <destination directory>] [-c|--compressor <"compression method">]
+-e[i]|--export[i] [regex|-v regex] [-d|--dir <destination directory>] [-c|--compressor <"compression method" or "-" (none)>]
 
--i[i]|--import[i] [regex|-v regex] [-d|--dir <source directory>] [-c|--compressor <"decompression method">]
+-i[i]|--import[i] [regex|-v regex] [-d|--dir <source directory>] [-c|--compressor <"decompression method" or "-" (none)>]
 
 -l|--list [regex|-v regex]
 
@@ -98,53 +122,53 @@ OPTIONS
 
 EXAMPLES
 
-M -b "ook.lite|instagram" (backup Facebook Lite and Instagram's APKs+data)
+migrator -b "ook.lite|instagram" (backup Facebook Lite and Instagram's APKs+data)
 
-M -b + com.android.vending com.android.inputmethod.latin (backup APKs and data of all user, plus two system apps, excluding APKs outside /data/app/)
+migrator -b + com.android.vending com.android.inputmethod.latin (backup APKs and data of all user, plus two system apps, excluding APKs outside /data/app/)
 
-M -bms (backup Magisk data (m) and generic Android settings (s))
+migrator -bms (backup Magisk data (m) and generic Android settings (s))
 
-M -bAmsD + \$(pm list packages -s | sed 's/^package://') (backup everything)
+migrator -bAmsD + $(pm list packages -s | sed 's/^package://') (backup everything)
 
-M -bAmsD (backup everything, except system apps)
+migrator -bAmsD (backup everything, except system apps)
 
-M -bd (backup only users apps' data (d))
+migrator -bd (backup only users apps' data (d))
 
-M --delete \\* (all backups)
+migrator --delete \* (all backups)
 
-M -d "*facebook.lite*" "*instag*"
+migrator -d "*facebook.lite*" "*instag*"
 
-M --export (all to /sdcard/migrator/)
+migrator --export (all to /sdcard/migrator/)
 
-M -e -d /storage/XXXX-XXXX/migrator (export all to /storage/XXXX-XXXX/migrator/)
+migrator -e -d /storage/XXXX-XXXX/migrator (export all to /storage/XXXX-XXXX/migrator/)
 
-M -ei (interactive --export)
+migrator -ei (interactive --export)
 
-M --import (from /sdcard/migrator/)
+migrator --import (from /sdcard/migrator/)
 
-M -i -d /storage/XXXX-XXXX/migrator
+migrator -i -d /storage/XXXX-XXXX/migrator
 
-M -ii -d /sdcard/m (interactive --import)
+migrator -ii -d /sdcard/m (interactive --import)
 
-M --list
+migrator --list
 
-M -l facebook.lite
+migrator -l facebook.lite
 
-M --restore --data facebook.lite
+migrator --restore --data facebook.lite
 
-M -r --imported --app --data facebook.lite
+migrator -r --imported --app --data facebook.lite
 
-M -rs (restore generic Android settings)
+migrator -rs (restore generic Android settings)
 
-M -rD (restore system data)
+migrator -rD (restore system data)
 
-M -rm (restore magisk data)
+migrator -rm (restore magisk data)
 
-M -rAms (restore everything, except system data (D, usually incompatible))
+migrator -rAms (restore everything, except system data (D, usually incompatible))
 
-M -s (enable apps with Settings.Secure.ANDROID_ID (SSAID) after rebooting)
+migrator -s (enable apps with Settings.Secure.ANDROID_ID (SSAID) after rebooting)
 
-M -L (export $log to /sdcard/migrator.log.bz2)
+migrator -L (export /dev/migrator.log to /sdcard/migrator.log.bz2)
 
 
 Migrator can backup/restore apps (a), respective data (d) and runtime permissions.
@@ -155,8 +179,7 @@ Everything in /data/adb/, except magisk/ is considered "Magisk data" (m).
 After restoring such data, one has to launch Magisk Manager and disable/remove all modules that are or may be incompatible with the [new] ROM.
 
 Accounts, call logs, contacts and SMS/MMS, other telephony and system data (D) restore is not fully guaranteed.
-These are complex files and often found in variable locations.
-Thus, restoring such data is not generally recommended to regular users.
+These are complex databases and often found in variable locations.
 You may want to export contacts to a vCard file or use a third-party app to backup/restore all telephony data.
 
 Backups of uninstalled apps are automatically removed when a backup command is issued.
@@ -167,15 +190,14 @@ Data of specified system apps is always backed up.
 
 Migrator itself is included in backups and exported alongside backup archives.
 
-Backups are stored in $bkp_dir/.
+Backups are stored in /data/migrator/local/.
 
 These backups take virtually no extra storage space (hard links).
 
-Backups can be exported as compressed archives.
-The default export/import directory is /sdcard/migrator.
-"lzop -1v" is the default compression method.
-Method here refers to "<program> <options>".
-Imported backups are stored in "/data/media/migrator/imported/".
+Backups can be exported as indivudual [compressed] archives.
+Backups are exported to /sdcard/migrator/ by default - and imported to "$imports_dir".
+The default compression method is <none> (faster, output: .tar file). Method here refers to "<program> <options>" (e.g., "zstd -1v").
+The decompression/extraction method to use is automatically determined based on file extension (supported extensions: tar, tar.bz*, tar.gz* and tar.lzo*). The user can supply an alternate method for decompressing other archive types.
 
 The Magisk module variant installs NetHunter Terminal.
 Highly recommended, it's always excluded from backups.
@@ -203,39 +225,46 @@ exit 0
 
 Config for Magisk and init.d
 Create "/data/migrator.conf" with "bkp="[sub options] [args]"", "cmd="post bkp cmd"", "freq=[hours]" and "delay=[minutes].
-e.g., "bkp=ADms; freq=24; delay=60" (defaults, used when \$config exists but is empty or values are null)
-The first backup starts \$delay minutes after boot.
+e.g., "bkp=ADms; freq=24; delay=60" (defaults, used when $config exists but is empty or values are null)
+The first backup starts $delay minutes after boot.
 The config can be updated without rebooting.
 Changes take efect in the next loop iteration.
-Logs are saved to "$log".
+Logs are saved to "/dev/migrator.log".
 Note: the config file is saved in /data and is not created automatically for obvious reasons. A factory reset wipes /data. After migrating to another ROM or performing a factory reset, you do not want your backups overwritten before the data is restored.
 
 Tasker or Similar
-"start-stop-daemon -bx M -S -- -bADms"
-If you don't have busybox installed system-wide, prepend it to the command line above.
-e.g., "/data/adb/magisk/busybox start-stop-daemon -bx M -S -- -bADms"
-Logs are saved to "$log".
+Backup everything, except system apps - and export to external storage: "(migrator -bADms && migrator -e -d /storage/XXXX-XXXX/my-backups &)".
+Verbose is redirected to "/dev/migrator.log".
 
 
 ROM MIGRATION STEPS AND NOTES
 
-1. Backup everything, except system apps: "M -bADms".
+1. Backup everything, except system apps: "migrator -bADms".
 
-2. Install the [new] ROM (factory reset implied), addons as desired - and root it.
+1.1. Export the backups to external storage (highly recommended): "migrator -e -d /storage/XXXX-XXXX/my-backups".
 
-3. Once booted, flash Migrator from Magisk Manager (no reboot needed afterwards).
+2. Move local (hard link type) backups to /data/media/0/: "mv /data/migrator /data/media/0)".
+Otherwise, wiping /data (excluding /data/media) will remove the backups as well.
+Data loss WARNING: do NOT move to /sdcard/! It has a different filesystem.
 
-4. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "M -rAms" or "/dev/M -rAms".
+3. Install the [new] ROM (factory reset implied), addons as desired - and root it.
 
-5. Launch Magisk Manager and disable/remove all restored modules that are or may be incompatible with the [new] ROM.
+4. Move backups back to /data/: "mv /data/media/0/migrator /data/".
 
-6. Reboot.
+4.1. If something goes wrong, import the backups from external storage: "migrator -i -d /storage/XXXX-XXXX/my-backups".
 
-Restoring system data (D, listed below) is not recommended to users who don't know how to find their way around potential issues.
+5. Once Android boots, flash migrator from Magisk Manager.
+Rebooting is not required.
 
-If you use a different root method, just ignore Magisk-related steps.
+6. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "migrator -rADms" or "/dev/migrator -rADms" to restore data.
 
-Remember that using a terminal other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
+7. Launch Magisk Manager and disable/remove all restored modules that are or may be incompatible with the [new] ROM.
+
+8. Reboot.
+
+If you use a different root method, ignore Magisk-related steps.
+
+Remember that using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
 
 
 SYSTEM DATA (D)
@@ -255,7 +284,7 @@ SYSTEM DATA (D)
 ASSORTED NOTES & TIPS
 
 Busybox and extra binaries can be placed in /data/adb/bin/.
-That's the first field in migrator's \$PATH.
+That's the first field in migrator's $PATH.
 
 "regex" and "-v regex" are grep syntax. "-E" is always implied.
 
