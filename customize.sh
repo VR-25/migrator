@@ -35,6 +35,17 @@ rm $MODPATH/License.md $MODPATH/TODO.txt
 set_perm_recursive $MODPATH 0 0 0755 0644
 set_perm_recursive $MODPATH/system/bin 0 0 0755 0755
 
+# ccrypt
+cd $MODPATH/bin
+case $ARCH in
+  arm*) rm ccrypt-x86;;
+  x86*|x64) rm ccrypt-arm;;
+  *) rm -rf $MODPATH/bin;;
+esac
+mv ccrypt* ccrypt 2>/dev/null && \
+  chmod -R 0755 .
+cd /
+
 # make NetHunter Terminal readily available
 $BOOTMODE && ! test -d /data/data/com.offsec.nhterm && {
   sestatus=$(getenforce)

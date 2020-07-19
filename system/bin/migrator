@@ -16,7 +16,7 @@ tmp=/dev/migrator.tmp
 bkp_dir=/data/migrator/local
 packages=/data/system/packages
 imports_dir=${bkp_dir%/*}/imported
-version="v2020.7.18-beta (202007180)"
+version="v2020.7.20-beta (202007200)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 ssaid_xml=/data/system/users/0/settings_ssaid.xml
 ssaid_boot_script=${bkp_dir%/*}/enable-ssaid-apps.sh
@@ -102,7 +102,7 @@ magisk_busybox=/data/adb/magisk/busybox
     exit 3
   fi
 }
-export PATH=$bin_dir:$busybox_dir:$PATH
+export PATH=$bin_dir:$busybox_dir:/data/adb/modules_update/migrator/bin:/data/adb/modules/migrator/bin:$PATH
 unset bin_dir busybox_dir magisk_busybox
 
 
@@ -155,6 +155,18 @@ $recovery_mode || {
 all=false
 tt "$param1" "-[br]|-[br][in]|-[br][in][in]|-[br]*A*" && all=true
 tt "$*" "*--all*" && all=true
+
+
+if t -n "${p-}"; then
+  p_="$p"
+  encryption=true
+  which ccrypt > /dev/null || {
+    echo "ccrypt not found"
+    exit 1
+  }
+else
+  encryption=false
+fi
 
 
 case "$param1" in
@@ -326,21 +338,37 @@ case "$param1" in
       bzip2*) extension=.tar.bz2;;
       gzip*|pigz*) extension=.tar.gz;;
       lzop*) extension=.tar.lzo;;
+      xz*) extension=.tar.xz;;
+      zip*) extension=.tar.zip;;
+      zstd*) extension=.tar.zst;;
       *) extension=.tar.${compressor%% *};;
     esac
 
     mkdir -p $dir
     echo "Exporting"
 
+    # workaround for Termux backup size issue
+    rm -rf com.termux/com.termux/files/home/storage/ 2>/dev/null
+
     ls -1 | grep -v '^migrator.sh$' | grep -E "$regex" | \
       while IFS= read -r bkp; do
         echo "  $bkp"
         rm $dir/${bkp}.tar* 2>/dev/null
         if t "$compressor" != -; then
-		  tar -c $bkp | $compressor > $dir/${bkp}$extension
+          if $encryption; then
+            tar -c $bkp | $compressor | ccrypt -E p > $dir/${bkp}${extension}.cpt
+            export p="$p_"
+          else
+            tar -c $bkp | $compressor > $dir/${bkp}$extension
+          fi
         else
-	      tar -cf $dir/${bkp}.tar $bkp
-	    fi
+          if $encryption; then
+            tar -c $bkp | ccrypt -E p > $dir/${bkp}.tar.cpt
+            export p="$p_"
+          else
+            tar -cf $dir/${bkp}.tar $bkp
+          fi
+        fi
       done
     cp $(readlink -f "$0") $dir/migrator.sh
   ;;
@@ -364,22 +392,38 @@ case "$param1" in
       eval parse_params $params
     }
 
+    decrypt() {
+      if $encryption; then
+        ccrypt -dcE p $bkp | $@
+        export p="$p_"
+      else
+        $@ $bkp
+      fi
+    }
+
     echo "Importing"
     ls -1 | grep -v '^migrator.sh$' | grep -E "$regex" | \
       while IFS= read -r bkp; do
         tt "$bkp" "*[a-z]*" || continue
         echo "  ${bkp%.tar*}"
         rm -f $imports_dir/${bkp%.tar*} 2>/dev/null
-        if t "$compressor" != -; then
-          case ${bkp##*.tar.} in
-            bz2|bzip2) bzip2 -cd $bkp | tar -xf - -C $imports_dir;;
-            gz|gzip|pigz) gzip -cd $bkp | tar -xf - -C $imports_dir;;
-            lzo|lzop) lzop -cd $bkp | tar -xf - -C $imports_dir;;
-            *) $compressor $bkp | tar -xf - -C $imports_dir;;
-          esac
-        else
-          tar -xf $bkp -C $imports_dir
-        fi
+        case ${bkp##*.tar.} in
+          bz2*|bzip2*) decrypt bzip2 -cd | tar -xf - -C $imports_dir;;
+          gz*|pigz*) decrypt gzip -cd | tar -xf - -C $imports_dir;;
+          lzo*) decrypt lzop -cd $bkp | tar -xf - -C $imports_dir;;
+          xz*|lzma*) decrypt xz -cd | tar -xf - -C $imports_dir;;
+          zip*) decrypt unzip -p | tar -xf - -C $imports_dir;;
+          zst*) decrypt zstd -cd | tar -xf - -C $imports_dir;;
+          *.tar|cpt)
+            if $encryption; then
+              ccrypt -dcE p $bkp | tar -xf - -C $imports_dir
+              export p="$p_"
+            else
+              tar -xf $bkp -C $imports_dir
+            fi
+          ;;
+          *) decrypt $compressor | tar -xf - -C $imports_dir;;
+        esac
       done
     cp -f migrator.sh $imports_dir/
   ;;
@@ -652,9 +696,9 @@ OPTIONS
 
 -d|--delete <"bkp name (wildcards supported)" ...>
 
--e[i]|--export[i] [regex|-v regex] [-d|--dir <destination directory>] [-c|--compressor <"compression method" or "-" (none)>]
+[p=<"password for encryption">] -e[i]|--export[i] [regex|-v regex] [-d|--dir <destination directory>] [-c|--compressor <"compression method" or "-" (none, default)>]
 
--i[i]|--import[i] [regex|-v regex] [-d|--dir <source directory>] [-c|--compressor <"decompression method" or "-" (none)>]
+[p=<"password for decryption">] -i[i]|--import[i] [regex|-v regex] [-d|--dir <source directory>] [-c|--compressor <"decompression method" or "-" (none)>]
 
 -l|--list [regex|-v regex]
 
@@ -694,6 +738,10 @@ ${0##*/} --import (from /sdcard/migrator/)
 ${0##*/} -i -d /storage/XXXX-XXXX/migrator
 
 ${0##*/} -ii -d /sdcard/m (interactive --import)
+
+p="my super secret password" ${0##*/} -e instagr (export backup, encrypted)
+
+p="my super secret password" ${0##*/} -i instagr (import encrypted backup)
 
 ${0##*/} --list
 
@@ -739,10 +787,15 @@ Backups are stored in $bkp_dir/.
 
 These backups take virtually no extra storage space (hard links).
 
-Backups can be exported as indivudual [compressed] archives.
-Backups are exported to /sdcard/migrator/ by default - and imported to "$imports_dir".
-The default compression method is <none> (faster, output: .tar file). Method here refers to "<program> <options>" (e.g., "zstd -1v").
-The decompression/extraction method to use is automatically determined based on file extension (supported extensions: tar, tar.bz*, tar.gz* and tar.lzo*). The user can supply an alternate method for decompressing other archive types.
+Backups can be exported as indivudual [compressed] archives (recommended).
+Data is exported to /sdcard/migrator/ by default - and imported to "$imports_dir".
+The default compression method is <none> (faster, output: .tar file).
+Method here refers to "<program> <options>" (e.g., "zstd -1").
+The decompression/extraction method to use is automatically determined based on file extension.
+Supported archives are tar, tar.bz*, tar.gz*, tar.lzma, tar.lzo*, tar.pigz, tar.xz, tar.zip and tar.zst*.
+The user can supply an alternate method for decompressing other archive types.
+Among the supported programs, only pigz and zstd are not generally available in Android/Busybox at this point.
+However, since pigz is most often used as a gzip alternative (faster), its .gz archives can also be extracted by gzip itself.
 
 The Magisk module variant installs NetHunter Terminal.
 Highly recommended, it's always excluded from backups.
@@ -758,6 +811,11 @@ But why "NetHunter Terminal"?
 It's free and open source, VERY light and regularly updated.
 The homepage is https://store.nethunter.com/en/packages/com.offsec.nhterm .
 You can always compare the package signatures and/or checksums.
+
+The Magisk module variant also ships with ccrypt v1.11 binaries for AES256 encryption.
+These are from Termux's repo: https://dl.bintray.com/termux/termux-packages-24/ .
+Non-Magisk users can place a static ccrypt binary in /data/adb/bin/ or use Termux.
+Note: the included binaries may only work on Android 7.0+.
 
 
 AUTOMATING BACKUPS

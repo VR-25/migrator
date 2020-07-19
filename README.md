@@ -12,6 +12,18 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.7.20-beta (202007200)
+
+Workaround for Termux backup size issue
+
+Optionally export backups AES256-encrypted with ccrypt.
+
+lzma|xz, zip and zst|zstd archives are also known by migrator.
+This means, specifying the extraction method is optional if <program> is available and in $PATH.
+Among the supported programs, only pigz and zstd are not generally available in Android/Busybox at this point.
+However, since pigz is most often used as a gzip alternative (faster), its .gz archives can also be extracted by gzip itself.
+
+
 v2020.7.18-beta (202007180)
 
 General fixes & optimizations
@@ -39,27 +51,6 @@ WARNING
 
 The ROM migration process has two additional steps to account for the new backup location.
 Failing to follow the instructions carefully will lead to data loss!
-
-
-v2020.7.11-beta (202007110)
-
-Auto backup config suports a new parameter: cmd="post bkp cmd".
-Backup/restore apps' device-encrypted data as well (/data/user_de/0/<pkg>).
-General fixes & optimizations
-Replaced all instances of ${0##*/} with M in README.md.
-The sysdata list includes more Bluetooth and accounts configuration files.
-
-
-v2020.7.8-beta (202007080)
-
-Automatic backups (Magisk, init.d and Tasker flavors)
-Major fixes & optimizations
-More comprehensive `--list`
-System data backup/restore sub-option is now D (formerly S).
-README.md has a copy of the help text.
-Updated documentation (ROM migration instructions, automatic backup configuration and more).
-Verbose is redirected to /dev/migrator.log, which can be exported to /sdcard/migrator.log.bz2 with `M -L`.
-Works in recovery environments (particularly useful for emergency backups).
 ```
 
 ---
@@ -86,7 +77,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --HELP
 
 ```
-Migrator v2020.7.18-beta (202007180)
+Migrator v2020.7.20-beta (202007200)
 A Backup Solution and ROM Migration Utility for Android
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+
@@ -107,9 +98,9 @@ OPTIONS
 
 -d|--delete <"bkp name (wildcards supported)" ...>
 
--e[i]|--export[i] [regex|-v regex] [-d|--dir <destination directory>] [-c|--compressor <"compression method" or "-" (none)>]
+[p=<"password for encryption">] -e[i]|--export[i] [regex|-v regex] [-d|--dir <destination directory>] [-c|--compressor <"compression method" or "-" (none, default)>]
 
--i[i]|--import[i] [regex|-v regex] [-d|--dir <source directory>] [-c|--compressor <"decompression method" or "-" (none)>]
+[p=<"password for decryption">] -i[i]|--import[i] [regex|-v regex] [-d|--dir <source directory>] [-c|--compressor <"decompression method" or "-" (none)>]
 
 -l|--list [regex|-v regex]
 
@@ -149,6 +140,10 @@ migrator --import (from /sdcard/migrator/)
 migrator -i -d /storage/XXXX-XXXX/migrator
 
 migrator -ii -d /sdcard/m (interactive --import)
+
+p="my super secret password" ${0##*/} -e instagr (export backup, encrypted)
+
+p="my super secret password" ${0##*/} -i instagr (import encrypted backup)
 
 migrator --list
 
@@ -194,10 +189,15 @@ Backups are stored in /data/migrator/local/.
 
 These backups take virtually no extra storage space (hard links).
 
-Backups can be exported as indivudual [compressed] archives.
-Backups are exported to /sdcard/migrator/ by default - and imported to "$imports_dir".
-The default compression method is <none> (faster, output: .tar file). Method here refers to "<program> <options>" (e.g., "zstd -1v").
-The decompression/extraction method to use is automatically determined based on file extension (supported extensions: tar, tar.bz*, tar.gz* and tar.lzo*). The user can supply an alternate method for decompressing other archive types.
+Backups can be exported as indivudual [compressed] archives (recommended).
+Data is exported to /sdcard/migrator/ by default - and imported to "/data/migrator/imported".
+The default compression method is <none> (faster, output: .tar file).
+Method here refers to "<program> <options>" (e.g., "zstd -1").
+The decompression/extraction method to use is automatically determined based on file extension.
+Supported archives are tar, tar.bz*, tar.gz*, tar.lzma, tar.lzo*, tar.pigz, tar.xz, tar.zip and tar.zst*.
+The user can supply an alternate method for decompressing other archive types.
+Among the supported programs, only pigz and zstd are not generally available in Android/Busybox at this point.
+However, since pigz is most often used as a gzip alternative (faster), its .gz archives can also be extracted by gzip itself.
 
 The Magisk module variant installs NetHunter Terminal.
 Highly recommended, it's always excluded from backups.
@@ -213,6 +213,11 @@ But why "NetHunter Terminal"?
 It's free and open source, VERY light and regularly updated.
 The homepage is https://store.nethunter.com/en/packages/com.offsec.nhterm .
 You can always compare the package signatures and/or checksums.
+
+The Magisk module variant also ships with ccrypt v1.11 binaries for AES256 encryption.
+These are from Termux's repo: https://dl.bintray.com/termux/termux-packages-24/ .
+Non-Magisk users can place a static ccrypt binary in /data/adb/bin/ or use Termux.
+Note: the included binaries may only work on Android 7.0+.
 
 
 AUTOMATING BACKUPS
