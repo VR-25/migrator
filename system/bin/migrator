@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # Migrator
-# A Backup Solution and ROM Migration Utility for Android
+# A Backup Solution and Data Migration Utility for Android
 # Copyright 2018-2020, VR25 (patreon.com/vr25)
 # License: GPLv3+
 
@@ -16,7 +16,7 @@ tmp=/dev/migrator.tmp
 bkp_dir=/data/migrator/local
 packages=/data/system/packages
 imports_dir=${bkp_dir%/*}/imported
-version="v2020.7.20-beta (202007200)"
+version="v2020.7.20-beta.1 (202007201)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 ssaid_xml=/data/system/users/0/settings_ssaid.xml
 ssaid_boot_script=${bkp_dir%/*}/enable-ssaid-apps.sh
@@ -106,14 +106,6 @@ export PATH=$bin_dir:$busybox_dir:/data/adb/modules_update/migrator/bin:/data/ad
 unset bin_dir busybox_dir magisk_busybox
 
 
-#legacy
-for i in /data/media/migrator /data/media/migrator/local \
-  /data/media/0/migrator /data/media/0/migrator/local
-do
-  chattr -i $i 2>/dev/null
-done
-
-
 param1=${1-}
 t -n "$param1" && shift
 
@@ -200,7 +192,18 @@ case "$param1" in
       || bkp_runtime_perms=false
 
     echo "$pkg_list" > $tmp
-    echo "$extras" >> $tmp
+
+    t -n "$extras" && {
+      if tt "$extras" "*/*"; then
+        cat $extras | dos2unix >> $tmp
+        echo >> $tmp
+      else
+        echo "$extras" | sed 's/ /\n/g' >> $tmp
+      fi
+    }
+
+    sort -u $tmp | sed -e 's/ //g' -e '/^$/d' > ${tmp}.tmp \
+      && mv -f ${tmp}.tmp $tmp
 
     while IFS= read -r pkg; do
 
@@ -676,7 +679,7 @@ case "$param1" in
     cd $TMPDIR
     cat <<EOF | more
 Migrator $version
-A Backup Solution and ROM Migration Utility for Android
+A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+
 
@@ -692,7 +695,7 @@ ${0##*/} <option...> [arg...]
 
 OPTIONS
 
--b[aAdDms]|--backup [--app] [--all] [--data] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ extra pkgs (full names)]
+-b[aAdDms]|--backup [--app] [--all] [--data] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file with/or full pkg names]
 
 -d|--delete <"bkp name (wildcards supported)" ...>
 
@@ -714,6 +717,8 @@ EXAMPLES
 ${0##*/} -b "ook.lite|instagram" (backup Facebook Lite and Instagram's APKs+data)
 
 ${0##*/} -b + com.android.vending com.android.inputmethod.latin (backup APKs and data of all user, plus two system apps, excluding APKs outside /data/app/)
+
+${0##*/} -bd -v . + /sdcard/list.txt (only data of pkgs in list)
 
 ${0##*/} -bms (backup Magisk data (m) and generic Android settings (s))
 
@@ -812,10 +817,14 @@ It's free and open source, VERY light and regularly updated.
 The homepage is https://store.nethunter.com/en/packages/com.offsec.nhterm .
 You can always compare the package signatures and/or checksums.
 
-The Magisk module variant also ships with ccrypt v1.11 binaries for AES256 encryption.
-These are from Termux's repo: https://dl.bintray.com/termux/termux-packages-24/ .
-Non-Magisk users can place a static ccrypt binary in /data/adb/bin/ or use Termux.
-Note: the included binaries may only work on Android 7.0+.
+
+ENCRYPTION
+
+Migrator uses ccrypt for encryption, but it does not ship with it.
+There's a package available for Termux: "pkg install ccrypt tsu".
+Once installed, non-Magisk users have to symlink ccrypt to /data/adb/bin/: "sudo "mkdir -p /data/adb/bin; ln -sf $(which ccrypt) /data/adb/bin/".
+Magisk uses need not do anything else besides installing the ccrypt Termux package.
+Alternatively (no Termux), a static ccrypt binary can be placed in /data/adb/bin/.
 
 
 AUTOMATING BACKUPS

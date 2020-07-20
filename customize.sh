@@ -36,15 +36,20 @@ set_perm_recursive $MODPATH 0 0 0755 0644
 set_perm_recursive $MODPATH/system/bin 0 0 0755 0755
 
 # ccrypt
-cd $MODPATH/bin
-case $ARCH in
-  arm*) rm ccrypt-x86;;
-  x86*|x64) rm ccrypt-arm;;
-  *) rm -rf $MODPATH/bin;;
-esac
-mv ccrypt* ccrypt 2>/dev/null && \
-  chmod -R 0755 .
-cd /
+if test -d $MODPATH/bin; then
+  cd $MODPATH/bin
+  case $ARCH in
+    arm*) rm ccrypt-x86;;
+    x86*|x64) rm ccrypt-arm;;
+    *) rm -rf $MODPATH/bin;;
+  esac
+  mv ccrypt* ccrypt 2>/dev/null && \
+    chmod -R 0755 .
+  cd /
+else
+  mkdir $MODPATH/bin
+  ln -s /data/data/com.termux/files/usr/bin/ccrypt $MODPATH/bin/
+fi
 
 # make NetHunter Terminal readily available
 $BOOTMODE && ! test -d /data/data/com.offsec.nhterm && {

@@ -1,4 +1,4 @@
-# Migrator - A Backup Solution and ROM Migration Utility for Android
+# Migrator - A Backup Solution and Data Migration Utility for Android
 
 
 Install as a regular Magisk module (no reboot required, though).
@@ -12,6 +12,17 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.7.20-beta.1 (202007201)
+
+General fixes & optimizations
+
+Packages to be backed up can be read from a file (+ filepath or -v . + filepath).
+The "-v ." construct is meant for excluding user apps.
+However, excluded apps can still be overridden by the list following the + sign.
+
+Updated encryption information.
+
+
 v2020.7.20-beta (202007200)
 
 Workaround for Termux backup size issue
@@ -49,7 +60,7 @@ Alternatively, you can move migrator's data folder to the new location (mv /data
 
 WARNING
 
-The ROM migration process has two additional steps to account for the new backup location.
+The data migration process has two additional steps to account for the new backup location.
 Failing to follow the instructions carefully will lead to data loss!
 ```
 
@@ -77,8 +88,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --HELP
 
 ```
-Migrator v2020.7.20-beta (202007200)
-A Backup Solution and ROM Migration Utility for Android
+Migrator v2020.7.20-beta.1 (202007201)
+A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25 (patreon.com/vr25)
 License: GPLv3+
 
@@ -94,7 +105,7 @@ migrator <option...> [arg...]
 
 OPTIONS
 
--b[aAdDms]|--backup [--app] [--all] [--data] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ extra pkgs (full names)]
+-b[aAdDms]|--backup [--app] [--all] [--data] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file with/or full pkg names]
 
 -d|--delete <"bkp name (wildcards supported)" ...>
 
@@ -116,6 +127,8 @@ EXAMPLES
 migrator -b "ook.lite|instagram" (backup Facebook Lite and Instagram's APKs+data)
 
 migrator -b + com.android.vending com.android.inputmethod.latin (backup APKs and data of all user, plus two system apps, excluding APKs outside /data/app/)
+
+migrator -bd -v . + /sdcard/list.txt (only data of pkgs in list)
 
 migrator -bms (backup Magisk data (m) and generic Android settings (s))
 
@@ -141,9 +154,9 @@ migrator -i -d /storage/XXXX-XXXX/migrator
 
 migrator -ii -d /sdcard/m (interactive --import)
 
-p="my super secret password" ${0##*/} -e instagr (export backup, encrypted)
+p="my super secret password" migrator -e instagr (export backup, encrypted)
 
-p="my super secret password" ${0##*/} -i instagr (import encrypted backup)
+p="my super secret password" migrator -i instagr (import encrypted backup)
 
 migrator --list
 
@@ -214,10 +227,14 @@ It's free and open source, VERY light and regularly updated.
 The homepage is https://store.nethunter.com/en/packages/com.offsec.nhterm .
 You can always compare the package signatures and/or checksums.
 
-The Magisk module variant also ships with ccrypt v1.11 binaries for AES256 encryption.
-These are from Termux's repo: https://dl.bintray.com/termux/termux-packages-24/ .
-Non-Magisk users can place a static ccrypt binary in /data/adb/bin/ or use Termux.
-Note: the included binaries may only work on Android 7.0+.
+
+ENCRYPTION
+
+Migrator uses ccrypt for encryption, but it does not ship with it.
+There's a package available for Termux: "pkg install ccrypt tsu".
+Once installed, non-Magisk users have to symlink ccrypt to /data/adb/bin/: "sudo "mkdir -p /data/adb/bin; ln -sf /data/adb/modules_update/migrator/bin/ccrypt /data/adb/bin/".
+Magisk uses need not do anything else besides installing the ccrypt Termux package.
+Alternatively (no Termux), a static ccrypt binary can be placed in /data/adb/bin/.
 
 
 AUTOMATING BACKUPS
