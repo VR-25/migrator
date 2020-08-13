@@ -13,27 +13,38 @@ case $ARCH in
   x86|x64) extract_libs x86;;
 esac
 
-# create migrator alias for lazy typing
-ln $MODPATH/system/bin/migrator $MODPATH/system/bin/M
 
-# make executables readily available
-exec_file=$MODPATH/system/bin/migrator
+# create symlinks
+
+mkdir $MODPATH/system/bin
+ln -s /data/adb/modules/migrator/migrator.sh $MODPATH/system/bin/
+ln -s /data/adb/modules/migrator/migrator.sh $MODPATH/system/bin/M
+$BOOTMODE && ln -sf $MODPATH/migrator.sh /data/adb/modules/migrator/migrator.sh 2>/dev/null
+
+exec_file=$MODPATH/migrator.sh
 sed 's|^#\!/.*|#\!/sbin/sh|' $exec_file > /data/M
-chmod 0755 /data/M
+set_perm /data/M 0 0 0755
 if $BOOTMODE; then
   ln -fs $exec_file /dev/
   ln -fs $exec_file /dev/M
-  ln -fs $exec_file /sbin 2>/dev/null && ln -fs $exec_file /sbin/M
+  test -d /sbin && {
+    /system/bin/mount -o remount,rw / 2>/dev/null \
+      || mount -o remount,rw /
+    ln -fs $exec_file /sbin 2>/dev/null \
+      && ln -fs $exec_file /sbin/M
+  }
 else
-  ln -sf /data/M /sbin/migrator 2>/dev/null && ln -sf /data/M /sbin/
+  ln -sf /data/M /sbin/migrator 2>/dev/null \
+    && ln -sf /data/M /sbin/
 fi
+
 
 # remove leftovers
 rm $MODPATH/License.md $MODPATH/TODO.txt
 
 # set permissions
 set_perm_recursive $MODPATH 0 0 0755 0644
-set_perm_recursive $MODPATH/system/bin 0 0 0755 0755
+set_perm $MODPATH/migrator.sh 0 0 0755
 
 # ccrypt
 if test -d $MODPATH/bin; then
@@ -44,7 +55,7 @@ if test -d $MODPATH/bin; then
     *) rm -rf $MODPATH/bin;;
   esac
   mv ccrypt* ccrypt 2>/dev/null && \
-    chmod -R 0755 .
+    set_perm ccrypt 0 0 0755
   cd /
 else
   mkdir $MODPATH/bin

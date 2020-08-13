@@ -1,1 +1,2 @@
-rm #legacy
+find and bundle static ccrypt binaries
+Termux data taking ages to restore
