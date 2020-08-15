@@ -2,7 +2,7 @@
 
 
 Install as a regular Magisk module (no reboot required, though).
-Alternatively, `migrator` can be extracted from root of the zip and executed as `su -c sh migrator`.
+Alternatively, `migrator.sh` can be extracted from the root of the zip and executed as `su -c sh migrator.sh`.
 
 Busybox is required on systems not rooted with Magisk.
 The binary can simply be placed in `/data/adb/bin/`.
@@ -12,6 +12,15 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.8.15-beta (202008150)
+
+Do not restore SSAIDs if com.google.android.gms is not installed.
+General fixes & optimizations
+Fixed bootloop caused by SSAID handling issues.
+"E", as in "-bE", no longer implies "D" (system data).
+Updated documentation
+
+
 v2020.8.12-beta (202008120)
 
 "E|--everything" flag for backup and restore can be used in place of "ADms" (e.g., "M -bE" or "M --backup --everything").
@@ -34,25 +43,13 @@ The "-v ." construct is meant for excluding user apps.
 However, excluded apps can still be overridden by the list following the + sign.
 
 Updated encryption information.
-
-
-v2020.7.20-beta (202007200)
-
-Workaround for Termux backup size issue
-
-Optionally export backups AES256-encrypted with ccrypt.
-
-lzma|xz, zip and zst|zstd archives are also known by migrator.
-This means, specifying the extraction method is optional if <program> is available and in $PATH.
-Among the supported programs, only pigz and zstd are not generally available in Android/Busybox at this point.
-However, since pigz is most often used as a gzip alternative (faster), its .gz archives can also be extracted by gzip itself.
 ```
 
 ---
 ## LICENSE
 
 
-Copyright 2018-2020, VR25 (patreon.com/vr25)
+Copyright 2018-2020, VR25
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -72,9 +69,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --HELP
 
 ```
-Migrator v2020.8.12-beta (202008120)
+Migrator v2020.8.15-beta (202008150)
 A Backup Solution and Data Migration Utility for Android
-Copyright 2018-2020, VR25 (patreon.com/vr25)
+Copyright 2018-2020, VR25
 License: GPLv3+
 
 
@@ -89,7 +86,7 @@ migrator <option...> [arg...]
 
 OPTIONS
 
-Restore backups
+Backup
 -b[aAdDEms]|--backup [--app] [--all] [--data] [--everything] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
 
 Delete backups (local and imported)
@@ -128,10 +125,10 @@ migrator -bd -v . + /sdcard/list.txt
 Backup Magisk data (m) and generic Android settings (s)
 migrator -bms
 
-Backup everything
+Backup everything, except system data (D)
 migrator -bE + $(pm list packages -s | sed 's/^package://')
 
-Backup everything, except system apps
+Backup everything, except system data (D) and system apps
 migrator -bE
 
 Backup all users apps' data (d)
@@ -189,7 +186,7 @@ Restore magisk data (everything in /data/adb/, except magisk/)
 migrator -rm
 
 Restore everything, except system data (D), which is usually incompatible)
-migrator -rAms
+migrator -rE
 
 Restore not-installed user apps+data)
 migrator -rn
@@ -277,8 +274,8 @@ delay=60
 cmd="M -e -d /storage/XXXX-XXXX/my-backups"
 
 Tasker
-Backup everything, except Tasker itself and system apps - and export to external storage
-"migrator -bE -v taskerm && migrator -e -d /storage/XXXX-XXXX/my-backups"
+Backup everything and export to external storage
+"migrator -bE && migrator -e -d /storage/XXXX-XXXX/my-backups"
 Verbose is redirected to "/dev/migrator.log".
 
 
@@ -303,10 +300,8 @@ Data loss WARNING: do NOT move to /sdcard/! It has a different filesystem.
 5. Once Android boots, flash migrator from Magisk Manager.
 Rebooting is not required.
 
-6. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "migrator -rAms" or "/dev/migrator -rAms" to restore data.
-Notes
-- if you followed step 4.1, specify the "i" or "--imported" flag (e.g, -rAims) to restore imported backups.
-- "E" can be used in place of "Ams". However, "E" also implies "D" (system data), which is not guaranteed to work flawlessly across different ROMs.
+6. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "migrator -rE" or "/dev/migrator -rE" to restore data.
+Notes: if you followed step 4.1, specify the "i" or "--imported" flag (e.g, -rAims) to restore imported backups.
 
 7. Launch Magisk Manager and disable/remove all restored modules that are or may be incompatible with the [new] ROM.
 

@@ -1,6 +1,6 @@
 id=migrator
 name=Migrator
-version=v2020.8.12-beta
-versionCode=202008120
+version=v2020.8.15-beta
+versionCode=202008150
 author=VR25 (patreon.com/vr25)
 description=Migrator is a backup solution and data migration utility for Android. It can backup/restore apps (including split APKs and SSAIDs) with respective data and runtime permissions, Magisk data and generic Android settings. ZERO warranties, use at your own risk! This is still in beta. Backup your data before using. Refer to the README.md on GitHub, "migrator --help" or "M -h". If executables aren't readily available (before a reboot), use "/dev/migrator" or "/dev/M".
