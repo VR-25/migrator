@@ -2,7 +2,9 @@
 
 
 Install as a regular Magisk module (no reboot required, though).
-Alternatively, `migrator.sh` can be extracted from the root of the zip and executed as `su -c sh migrator.sh`.
+If `M` and `migrator` executables are unavailable before a reboot, use `/dev/M` or `/dev/migrator`.
+
+`migrator.sh` can be extracted from the root of the zip and used as is (e.g., `su -c sh migrator.sh`).
 
 Busybox is required on systems not rooted with Magisk.
 The binary can simply be placed in `/data/adb/bin/`.
@@ -12,6 +14,14 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.8.17-beta (202008170)
+
+Enhanced auto-backup logic
+General fixes & optimizations
+More intuitive auto-backup config syntax
+Updated backup automation info (config, Tasker script and more)
+
+
 v2020.8.15-beta (202008150)
 
 Do not restore SSAIDs if com.google.android.gms is not installed.
@@ -26,23 +36,9 @@ v2020.8.12-beta (202008120)
 "E|--everything" flag for backup and restore can be used in place of "ADms" (e.g., "M -bE" or "M --backup --everything").
 
 General fixes
-
 Major optimizations
-
 Save migrator's data in /sdcard/Download/migrator/.
-
 Updated documentation
-
-
-v2020.7.20-beta.1 (202007201)
-
-General fixes & optimizations
-
-Packages to be backed up can be read from a file (+ filepath or -v . + filepath).
-The "-v ." construct is meant for excluding user apps.
-However, excluded apps can still be overridden by the list following the + sign.
-
-Updated encryption information.
 ```
 
 ---
@@ -69,7 +65,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --HELP
 
 ```
-Migrator v2020.8.15-beta (202008150)
+Migrator v2020.8.17-beta (202008170)
 A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25
 License: GPLv3+
@@ -259,23 +255,22 @@ AUTOMATING BACKUPS
 exit 0
 
 Config for Magisk and init.d
-Create "/data/migrator.conf" (refer to "sample config file" below).
-The first backup starts $delay minutes after boot.
-The config can be updated without rebooting.
-Changes take efect in the next loop iteration.
-Logs are saved to "/dev/migrator.log".
-Note: the config file is saved in /data and is not created automatically for obvious reasons. A factory reset wipes /data. After migrating to another ROM or performing a factory reset, you do not want your backups overwritten before the data is restored.
-
-Sample Config File
 # /data/migrator.conf
-bkp=E
-freq=24
-delay=60
-cmd="M -e -d /storage/XXXX-XXXX/my-backups"
+# Default config, same as a blank file
+# Note: this is not created automatically.
+cmd="migrator -bE && migrator -e" # Commands to run
+freq=24 # Every 24 hours
+delay=60 # Starting 60 minutes after boot
 
-Tasker
-Backup everything and export to external storage
-"migrator -bE && migrator -e -d /storage/XXXX-XXXX/my-backups"
+Sample Tasker Script
+#!/system/bin/sh
+# /data/my-tasker-script
+# su -c /data/my-tasker-script
+# This requires read and execute permissions to run
+migrator -bE
+migrator -e -d /mnt/media_rw/XXXX-XXXX/my-backups
+
+Debugging
 Verbose is redirected to "/dev/migrator.log".
 
 

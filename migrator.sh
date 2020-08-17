@@ -17,7 +17,7 @@ bkp_dir=/data/migrator/local
 packages=/data/system/packages
 data_dir=/sdcard/Download/migrator
 imports_dir=${bkp_dir%/*}/imported
-version="v2020.8.15-beta (202008150)"
+version="v2020.8.17-beta (202008170)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 settings=/data/system/users/0/settings_
 ssaid_xml=${settings}ssaid.xml
@@ -181,9 +181,18 @@ case "$param1" in
     tt "$*" "*-v*" && v=v || v=
     regex="$(echo "$*" | sed -E 's/ |-v|--(app|data|everything|magisk|settings|sysdata)//g')"
 
-    pkg_list="$(grep 'name=.*codePath="/data/app/' ${packages}.xml \
-      | grep -E$v "${regex:-..}" | grep -v com.offsec.nhterm \
-      | awk '{print $2}' | tr -d \" | sed 's/^name=//')"
+    if $recovery_mode; then
+      pkg_list="$(grep 'name=.*codePath="/data/app/' ${packages}.xml \
+        | grep -v com.offsec.nhterm \
+        | grep -E$v "${regex:-..}" \
+        | awk '{print $2}' | tr -d \" \
+        | sed 's/^name=//')"
+    else
+      pkg_list="$(pm list packages -3 \
+        | sed 's/^package://' \
+        | grep -v com.offsec.nhterm \
+        | grep -E$v "${regex:-..}")"
+    fi
 
     unset regex
     mkdir -p $bkp_dir
@@ -680,8 +689,7 @@ case "$param1" in
   # enable apps with Settings.Secure.ANDROID_ID (SSAID) and start automatic backups (if enabled)
   --boot|-*s*)
 
-    ssaid_only=true
-    t $param1 = --boot && ssaid_only=false
+    t $param1 = --boot && ssaid_only=false || ssaid_only=true
 
     until t -d /sdcard/Download \
       && t .$(getprop sys.boot_completed 2>/dev/null) = .1 \
@@ -697,16 +705,17 @@ case "$param1" in
 
     $ssaid_only && exit 0
 
-    bkp=E
+    cmd="${0##*/} -bE && ${0##*/} -e" # Commands to run
+    freq=24 # Every 24 hours
+    delay=60 # Starting 60 minutes after boot
     config=/data/migrator.conf
 
     t -f $config && {
       . $config
-      sleep $(( ${delay:-60} * 60 ))
-      while true; do
-        $0 -b$bkp || break
-        eval "${cmd-}"
-        sleep $(( ${freq:-24} * 60 * 60 ))
+      sleep $(( $delay * 60 ))
+      while :; do
+        eval "$cmd"
+        sleep $(( $freq * 60 * 60 ))
         . $config
       done
     }
@@ -907,23 +916,22 @@ AUTOMATING BACKUPS
 exit 0
 
 Config for Magisk and init.d
-Create "/data/migrator.conf" (refer to "sample config file" below).
-The first backup starts \$delay minutes after boot.
-The config can be updated without rebooting.
-Changes take efect in the next loop iteration.
-Logs are saved to "$log".
-Note: the config file is saved in /data and is not created automatically for obvious reasons. A factory reset wipes /data. After migrating to another ROM or performing a factory reset, you do not want your backups overwritten before the data is restored.
-
-Sample Config File
 # /data/migrator.conf
-bkp=E
-freq=24
-delay=60
-cmd="M -e -d /storage/XXXX-XXXX/my-backups"
+# Default config, same as a blank file
+# Note: this is not created automatically.
+cmd="${0##*/} -bE && ${0##*/} -e" # Commands to run
+freq=24 # Every 24 hours
+delay=60 # Starting 60 minutes after boot
 
-Tasker
-Backup everything and export to external storage
-"${0##*/} -bE && ${0##*/} -e -d /storage/XXXX-XXXX/my-backups"
+Sample Tasker Script
+#!/system/bin/sh
+# /data/my-tasker-script
+# su -c /data/my-tasker-script
+# This requires read and execute permissions to run
+${0##*/} -bE
+${0##*/} -e -d /mnt/media_rw/XXXX-XXXX/my-backups
+
+Debugging
 Verbose is redirected to "$log".
 
 
