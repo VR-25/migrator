@@ -1,2 +1,3 @@
 find and bundle static ccrypt binaries
 gms "can't read media"?
+direct export (no hard links)

@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # Migrator
 # A Backup Solution and Data Migration Utility for Android
-# Copyright 2018-2020, VR25 (patreon.com/vr25)
+# Copyright 2018-2020, VR25
 # License: GPLv3+
 
 
@@ -17,7 +17,7 @@ bkp_dir=/data/migrator/local
 packages=/data/system/packages
 data_dir=/sdcard/Download/migrator
 imports_dir=${bkp_dir%/*}/imported
-version="v2020.8.17-beta (202008170)"
+version="v2020.8.26-beta (202008260)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 settings=/data/system/users/0/settings_
 ssaid_xml=${settings}ssaid.xml
@@ -51,11 +51,11 @@ parse_params() {
         shift 2
       ;;
       -v)
-        regex="$1 \"$2\""
+        regex="$1 \"$(echo "$2" | sed 's/\,/\|/g')\""
         shift 2
       ;;
       *)
-        regex="$1"
+        regex="$(echo "$1" | sed 's/\,/\|/g')"
         shift
       ;;
     esac
@@ -78,16 +78,19 @@ tt() {
 
 # verbose
 tt "${1-}" "-L|--log|--boot" || {
-  date > $log
+  touch $log
+  t $(du -m $log | cut -f1) -ge 2 && date > $log || date >> $log
   echo "$version" >> $log
   set -x >> $log 2>&1
 }
 
 
 # prepare busybox and extra executables
+
 bin_dir=/data/adb/bin
 busybox_dir=/dev/.busybox
 magisk_busybox=/data/adb/magisk/busybox
+
 [ -x $busybox_dir/ls ] || {
   mkdir -p $busybox_dir
   chmod 0700 $busybox_dir
@@ -104,7 +107,8 @@ magisk_busybox=/data/adb/magisk/busybox
     exit 3
   fi
 }
-export PATH=$bin_dir:$busybox_dir:/data/adb/modules_update/migrator/bin:/data/adb/modules/migrator/bin:$PATH
+
+export PATH="$bin_dir:$busybox_dir:/data/adb/modules_update/migrator/bin:/data/adb/modules/migrator/bin:$PATH"
 unset bin_dir busybox_dir magisk_busybox
 
 
@@ -135,7 +139,8 @@ $recovery_mode || {
     t .$sestatus = .Enforcing && setenforce 1
     set +x
     $ssaid && {
-      printf "Reboot $(t -f /data/adb/modules/migrator/service.sh || echo "& run \"${0##*/} -s\" ")"
+      printf "Reboot $(t -f /data/adb/modules/migrator/service.sh \
+        || echo "& run \"${0##*/} -s\" ")"
       printf "to enable apps with Settings.Secure.ANDROID_ID (SSAID)\n"
     }
     rm /data/.__hltest /dev/._split 2>/dev/null
@@ -179,37 +184,54 @@ case "$param1" in
     extras="$(echo "$*" | grep -o '\+.*' | sed 's/\+ //')"
     set -- $(echo "$@" | sed 's/\+.*//')
     tt "$*" "*-v*" && v=v || v=
-    regex="$(echo "$*" | sed -E 's/ |-v|--(app|data|everything|magisk|settings|sysdata)//g')"
 
-    if $recovery_mode; then
-      pkg_list="$(grep 'name=.*codePath="/data/app/' ${packages}.xml \
-        | grep -v com.offsec.nhterm \
-        | grep -E$v "${regex:-..}" \
-        | awk '{print $2}' | tr -d \" \
-        | sed 's/^name=//')"
+    regex="$(echo "$*" \
+      | sed -E 's/ |-v|--(app|data|everything|magisk|settings|sysdata)//g' \
+      | sed 's/\,/\|/g')"
+
+    no_list=false
+
+    if tt "$regex" "/*"; then
+      set -e
+      cat $regex | dos2unix > $tmp
+      set +e
+    elif tt "$regex" "--"; then
+      set -e
+      cat $data_dir/packages.list | dos2unix > $tmp
+      set +e
     else
-      pkg_list="$(pm list packages -3 \
-        | sed 's/^package://' \
-        | grep -v com.offsec.nhterm \
-        | grep -E$v "${regex:-..}")"
+      no_list=true
+      if $recovery_mode; then
+        grep 'name=.*codePath="/data/app/' ${packages}.xml \
+          | grep -v com.offsec.nhterm \
+          | grep -E$v "${regex:-..}" \
+          | awk '{print $2}' | tr -d \" \
+          | sed 's/^name=//' > $tmp
+      else
+        pm list packages -3 \
+          | sed 's/^package://' \
+          | grep -v com.offsec.nhterm \
+          | grep -E$v "${regex:-..}" > $tmp
+      fi
     fi
+
+    $no_list || {
+      # parse regex and generate full package names
+      (set +x
+      cut -d ' ' -f 1 ${packages}.list > ${tmp}1
+      : > ${tmp}2
+      while IFS= read -r l; do
+       grep -E "$l" ${tmp}1 >> ${tmp}2
+      done < $tmp
+      mv -f ${tmp}2 $tmp)
+    }
 
     unset regex
     mkdir -p $bkp_dir
 
-    # remove backups of uninstalled apps
-    (set +x
-    ls -1 $bkp_dir 2>/dev/null \
-      | grep -Ev '^_magisk$|^migrator.sh$|^_settings$|^_sysdata$' | \
-      while IFS= read -r pkg; do
-        grep -q "^$pkg " ${packages}.list || rm -rf $bkp_dir/$pkg
-      done)
-
     t -f /data/system/users/0/runtime-permissions.xml \
       && bkp_runtime_perms=true \
       || bkp_runtime_perms=false
-
-    echo "$pkg_list" > $tmp
 
     t -n "$extras" && {
       if tt "$extras" "*/*"; then
@@ -220,8 +242,16 @@ case "$param1" in
       fi
     }
 
-    sort -u $tmp | sed -e 's/ //g' -e '/^$/d' > ${tmp}.tmp \
-      && mv -f ${tmp}.tmp $tmp
+    sort -u $tmp | sed -e 's/ //g' -e '/^$/d' > ${tmp}1 \
+      && mv -f ${tmp}1 $tmp
+
+    t -n "$extras" && {
+      # filter out unistalled packages
+      (set +x
+      while IFS= read -r l; do
+        grep -q "^$l " ${packages}.list || sed -i "/^$l$/d" $tmp
+      done < $tmp)
+    }
 
     checked=false
 
@@ -231,7 +261,8 @@ case "$param1" in
 
       $checked || {
         checked=true
-        { $everything || $all || tt "$param1" "-b*[ad]*" || tt "$*" "*--app*|*--data*"; } || break
+        { $everything || $all || tt "$param1" "-b*[ad]*" \
+          || tt "$*" "*--app*|*--data*"; } || break
       }
 
       mkdir -p $bkp_dir/$pkg
@@ -297,7 +328,7 @@ case "$param1" in
     fi
 
     # backup system data
-    if tt "$param1" "-b*D*" || tt "$*" "*--sysdata*"; then
+    if $everything || tt "$param1" "-b*D*" || tt "$*" "*--sysdata*"; then
       echo "  System data"
       rm -rf $bkp_dir/_sysdata 2>/dev/null
       mkdir $bkp_dir/_sysdata
@@ -325,6 +356,14 @@ case "$param1" in
             >> $bkp_dir/_magisk/restore-attributes.sh
         done
     fi
+
+    # remove backups of uninstalled packages
+    set +x
+    ls -1 $bkp_dir 2>/dev/null \
+      | grep -Ev '^_magisk$|^migrator.sh$|^_settings$|^_sysdata$' | \
+      while IFS= read -r pkg; do
+        grep -q "^$pkg " ${packages}.list || rm -rf $bkp_dir/$pkg
+      done
   ;;
 
 
@@ -395,7 +434,16 @@ case "$param1" in
           fi
         fi
       done
+
     cp $(readlink -f "$0") $dir/migrator.sh
+
+    # remove backups of uninstalled packages
+    set +x
+    ls -1 $dir 2>/dev/null \
+      | grep -Ev '^_magisk\.|^migrator.sh$|^_settings\.|^_sysdata\.' | \
+      while IFS= read -r pkg; do
+        t -d $bkp_dir/${pkg%.*} || rm $dir/$pkg
+      done
   ;;
 
 
@@ -455,7 +503,7 @@ case "$param1" in
 
 
   *-l*) # list
-    regex="$*"
+    regex="$(echo "$*" | sed 's/\,/\|/g')"
     list_bkps() {
       echo $1/
       ls -1 $1 2>/dev/null | sed -En -e '/^migrator.sh/d' -e "/${regex:-..}/p" | \
@@ -495,7 +543,9 @@ case "$param1" in
 
     tt "$*" "*-v*" && v=v || v=
 
-    regex="$(echo "$*" | sed -E 's/ |-v|--(app|data|everything|imported|magisk|not-installed|settings|sysdata)//g')"
+    regex="$(echo "$*" \
+      | sed -E 's/ |-v|--(app|data|everything|imported|magisk|not-installed|settings|sysdata)//g' \
+      | sed 's/\,/\|/g')"
 
     if tt "$param1" "-r*i*" || tt "$*" "*--imported*"; then
       bkp_dir=$imports_dir
@@ -651,7 +701,7 @@ case "$param1" in
         while IFS= read -r setting; do
           tt "$setting" "*[a-z]*" || continue
           grep -q " name=\"${setting%%=*}\" " ${settings}$namespace.xml && {
-            echo "    ${setting%%=*}="${setting#*=}""
+            echo "    ${setting%%=*}=\"${setting#*=}\""
             settings put $namespace ${setting%%=*} "${setting#*=}"
           }
         done < $bkp_dir/_settings/$namespace.txt
@@ -717,6 +767,7 @@ case "$param1" in
         eval "$cmd"
         sleep $(( $freq * 60 * 60 ))
         . $config
+        set +x
       done
     }
   ;;
@@ -738,13 +789,13 @@ This is still in beta. Backup your data before using.
 
 USAGE
 
-${0##*/} <option...> [arg...]
+${0##*/} [option...] [arg...]
 
 
 OPTIONS
 
 Backup
--b[aAdDEms]|--backup [--app] [--all] [--data] [--everything] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
+-b[aAdDEms]|--backup [/path/to/list or "--" for $data_dir/packages.list] [--app] [--all] [--data] [--everything] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
 
 Delete backups (local and imported)
 -d|--delete <"bkp name (wildcards supported)" ...>
@@ -771,21 +822,21 @@ Manually enable SSAID apps
 EXAMPLES
 
 Backup Facebook Lite and Instagram (apps and data)
-${0##*/} -b "ook.lite|instagram"
+${0##*/} -b ook.lite,instagram
 
 Backup all user apps and data, plus two system apps, excluding APKs outside /data/app/
 ${0##*/} -b + com.android.vending com.android.inputmethod.latin
 
 Backup data (d) of pkgs in /sdcard/list.txt
-${0##*/} -bd -v . + /sdcard/list.txt
+${0##*/} -bd /sdcard/list.txt
 
 Backup Magisk data (m) and generic Android settings (s)
 ${0##*/} -bms
 
-Backup everything, except system data (D)
+Backup everything
 ${0##*/} -bE + \$(pm list packages -s | sed 's/^package://')
 
-Backup everything, except system data (D) and system apps
+Backup everything, except system apps
 ${0##*/} -bE
 
 Backup all users apps' data (d)
@@ -860,7 +911,7 @@ Accounts, call logs, contacts and SMS/MMS, other telephony and system data (D) r
 These are complex databases and often found in variable locations.
 You may want to export contacts to a vCard file or use a third-party app to backup/restore all telephony data.
 
-Backups of uninstalled apps are automatically removed whenever a backup command is executed.
+Backups of uninstalled packages are automatically removed at the end of backup and export operations.
 
 For greater compatibility and safety, system apps are not backed up, unless specified as "extras" (see examples).
 No APK outside /data/app/ is ever backed up.
@@ -928,8 +979,8 @@ Sample Tasker Script
 # /data/my-tasker-script
 # su -c /data/my-tasker-script
 # This requires read and execute permissions to run
-${0##*/} -bE
-${0##*/} -e -d /mnt/media_rw/XXXX-XXXX/my-backups
+(${0##*/} -bE
+${0##*/} -e -d /storage/XXXX-XXXX/my-backups &)
 
 Debugging
 Verbose is redirected to "$log".
@@ -991,6 +1042,9 @@ That's the first field in migrator's \$PATH.
 
 Most operations work in recovery environments as well.
 One can either flash the Magisk module [again] to have migrator and M commands available, or run "/data/M".
+
+rsync can be used in auto-backup config to sync backups over an ssh tunnel.
+e.g., cmd="${0##*/} -bE && rsync -a --del \$bkp_dir vr25@192.168.1.33:migrator"
 EOF
   ;;
 esac

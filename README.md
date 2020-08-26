@@ -14,6 +14,24 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.8.26-beta (202008260)
+
+A comma can be used in place of "|" for regex alternation (e.g., "M -b faceb,instag,whatsa").
+
+Added tips on using rsync in auto-backup config to sync backups over an ssh tunnel.
+
+Read package names from list, with regex support (e.g., "M -b /path/to/file", "M -b --" (for /sdcard/Download/migrator/packages.list)).
+
+Remove backups of uninstalled apps from export directory as well.
+
+Don't overwrite the log file if its size is less than 2M.
+Performance enhancements
+Skip unistalled packages from <list>".
+Unlike -rE, -bE now implies D too.
+Updated documentation.
+Updated bundled terminal (Magisk variant).
+
+
 v2020.8.17-beta (202008170)
 
 Enhanced auto-backup logic
@@ -28,16 +46,6 @@ Do not restore SSAIDs if com.google.android.gms is not installed.
 General fixes & optimizations
 Fixed bootloop caused by SSAID handling issues.
 "E", as in "-bE", no longer implies "D" (system data).
-Updated documentation
-
-
-v2020.8.12-beta (202008120)
-
-"E|--everything" flag for backup and restore can be used in place of "ADms" (e.g., "M -bE" or "M --backup --everything").
-
-General fixes
-Major optimizations
-Save migrator's data in /sdcard/Download/migrator/.
 Updated documentation
 ```
 
@@ -62,10 +70,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 
 ---
-## --HELP
+## --help
 
 ```
-Migrator v2020.8.17-beta (202008170)
+Migrator v2020.8.26-beta (202008260)
 A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25
 License: GPLv3+
@@ -77,13 +85,13 @@ This is still in beta. Backup your data before using.
 
 USAGE
 
-migrator <option...> [arg...]
+migrator [option...] [arg...]
 
 
 OPTIONS
 
 Backup
--b[aAdDEms]|--backup [--app] [--all] [--data] [--everything] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
+-b[aAdDEms]|--backup [/path/to/list or "--" for /sdcard/Download/migrator/packages.list] [--app] [--all] [--data] [--everything] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
 
 Delete backups (local and imported)
 -d|--delete <"bkp name (wildcards supported)" ...>
@@ -110,21 +118,21 @@ Manually enable SSAID apps
 EXAMPLES
 
 Backup Facebook Lite and Instagram (apps and data)
-migrator -b "ook.lite|instagram"
+migrator -b ook.lite,instagram
 
 Backup all user apps and data, plus two system apps, excluding APKs outside /data/app/
 migrator -b + com.android.vending com.android.inputmethod.latin
 
 Backup data (d) of pkgs in /sdcard/list.txt
-migrator -bd -v . + /sdcard/list.txt
+migrator -bd /sdcard/list.txt
 
 Backup Magisk data (m) and generic Android settings (s)
 migrator -bms
 
-Backup everything, except system data (D)
+Backup everything
 migrator -bE + $(pm list packages -s | sed 's/^package://')
 
-Backup everything, except system data (D) and system apps
+Backup everything, except system apps
 migrator -bE
 
 Backup all users apps' data (d)
@@ -199,7 +207,7 @@ Accounts, call logs, contacts and SMS/MMS, other telephony and system data (D) r
 These are complex databases and often found in variable locations.
 You may want to export contacts to a vCard file or use a third-party app to backup/restore all telephony data.
 
-Backups of uninstalled apps are automatically removed whenever a backup command is executed.
+Backups of uninstalled packages are automatically removed at the end of backup and export operations.
 
 For greater compatibility and safety, system apps are not backed up, unless specified as "extras" (see examples).
 No APK outside /data/app/ is ever backed up.
@@ -267,8 +275,8 @@ Sample Tasker Script
 # /data/my-tasker-script
 # su -c /data/my-tasker-script
 # This requires read and execute permissions to run
-migrator -bE
-migrator -e -d /mnt/media_rw/XXXX-XXXX/my-backups
+(migrator -bE
+migrator -e -d /storage/XXXX-XXXX/my-backups &)
 
 Debugging
 Verbose is redirected to "/dev/migrator.log".
@@ -330,4 +338,7 @@ That's the first field in migrator's $PATH.
 
 Most operations work in recovery environments as well.
 One can either flash the Magisk module [again] to have migrator and M commands available, or run "/data/M".
+
+rsync can be used in auto-backup config to sync backups over an ssh tunnel.
+e.g., cmd="migrator -bE && rsync -a --del $bkp_dir vr25@192.168.1.33:migrator"
 ```
