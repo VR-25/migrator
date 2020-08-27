@@ -17,7 +17,7 @@ bkp_dir=/data/migrator/local
 packages=/data/system/packages
 data_dir=/sdcard/Download/migrator
 imports_dir=${bkp_dir%/*}/imported
-version="v2020.8.26-beta (202008260)"
+version="v2020.8.27-beta (202008270)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 settings=/data/system/users/0/settings_
 ssaid_xml=${settings}ssaid.xml
@@ -186,7 +186,7 @@ case "$param1" in
     tt "$*" "*-v*" && v=v || v=
 
     regex="$(echo "$*" \
-      | sed -E 's/ |-v|--(app|data|everything|magisk|settings|sysdata)//g' \
+      | sed -E 's/ |-v|--(app|data|everything|magisk|new|settings|sysdata)//g' \
       | sed 's/\,/\|/g')"
 
     no_list=false
@@ -252,6 +252,14 @@ case "$param1" in
         grep -q "^$l " ${packages}.list || sed -i "/^$l$/d" $tmp
       done < $tmp)
     }
+
+    if tt "$param1" "-b*n*" || tt "$*" "*--new*"; then
+      # exclude already backed up
+      while IFS= read -r l; do
+        tt "$l" "*[a-z]*" || continue
+        t -d $bkp_dir/$l && sed -i "/^$l$/d" $tmp
+      done < $tmp
+    fi
 
     checked=false
 
@@ -387,7 +395,7 @@ case "$param1" in
         echo
         ls -1 | grep -v '^migrator.sh$'
         echo
-        echo '[regex, default: ".."|-v regex] [-d <destination directory, default: $data_dir/exported>] [-c <"compression method" or "-" (none, default)>]'
+        echo '[regex, default: ".."|-v regex] [-d <base directory, default (full): $data_dir/exported>] [-c <"compression method" or "-" (none, default)>]'
         echo
         printf ": "
         read params
@@ -408,6 +416,7 @@ case "$param1" in
       *) extension=.tar.${compressor%% *};;
     esac
 
+    t $dir = $data_dir/exported || dir=$dir/migrator_exported
     mkdir -p $dir
     echo "Exporting"
 
@@ -600,7 +609,7 @@ case "$param1" in
         # exclude installed apps
         while IFS= read -r i; do
           tt "$i" "*[a-z]*" || continue
-          grep -q "$i " ${packages}.list && sed -i /$i$/d $tmp
+          grep -q "$i " ${packages}.list && sed -i "/^$i$/d" $tmp
         done < $tmp
       fi
 
@@ -647,7 +656,7 @@ case "$param1" in
             id=$(( id + 1 ))
             f2="id=\"$id\""
             f3="name=\"$(stat -c %u /data/data/$pkg)\""
-            sed -i /$pkg/d $ssaid_xml_tmp
+            sed -i "/\"$pkg\"/d" $ssaid_xml_tmp
             echo "${@}" | sed 's/^/  /' | sed -e "s/$2/$f2/" -e "s/$3/$f3/" >> $ssaid_xml_tmp
           }
 
@@ -795,7 +804,7 @@ ${0##*/} [option...] [arg...]
 OPTIONS
 
 Backup
--b[aAdDEms]|--backup [/path/to/list or "--" for $data_dir/packages.list] [--app] [--all] [--data] [--everything] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
+-b[aAdDEmns]|--backup [/path/to/list or "--" for $data_dir/packages.list] [--app] [--all] [--data] [--everything] [--magisk] [--new] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
 
 Delete backups (local and imported)
 -d|--delete <"bkp name (wildcards supported)" ...>
@@ -820,6 +829,9 @@ Manually enable SSAID apps
 
 
 EXAMPLES
+
+Backup only packages not yet backed up
+${0##*/} -bn
 
 Backup Facebook Lite and Instagram (apps and data)
 ${0##*/} -b ook.lite,instagram
@@ -851,8 +863,8 @@ ${0##*/} -d "*facebook.lite*" "*instag*"
 Export all backups to $data_dir/exported/
 ${0##*/} --export
 
-... To /storage/XXXX-XXXX/migrator/
-${0##*/} -e -d /storage/XXXX-XXXX/migrator
+... To /storage/XXXX-XXXX/migrator_exported
+${0##*/} -e -d /storage/XXXX-XXXX
 
 Interactive --export
 ${0##*/} -ei

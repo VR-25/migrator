@@ -14,6 +14,15 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+2020.8.27-beta (202008270)
+
+Export backups to $base_dir/migrator_exported/ to prevent accidental data loss while auto-removing backups of uninstalled packages.
+
+Filter out packages already backed up ("M -bn" or "M -b --new").
+
+Misc safety patches
+
+
 v2020.8.26-beta (202008260)
 
 A comma can be used in place of "|" for regex alternation (e.g., "M -b faceb,instag,whatsa").
@@ -38,15 +47,6 @@ Enhanced auto-backup logic
 General fixes & optimizations
 More intuitive auto-backup config syntax
 Updated backup automation info (config, Tasker script and more)
-
-
-v2020.8.15-beta (202008150)
-
-Do not restore SSAIDs if com.google.android.gms is not installed.
-General fixes & optimizations
-Fixed bootloop caused by SSAID handling issues.
-"E", as in "-bE", no longer implies "D" (system data).
-Updated documentation
 ```
 
 ---
@@ -91,7 +91,7 @@ migrator [option...] [arg...]
 OPTIONS
 
 Backup
--b[aAdDEms]|--backup [/path/to/list or "--" for /sdcard/Download/migrator/packages.list] [--app] [--all] [--data] [--everything] [--magisk] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
+-b[aAdDEmns]|--backup [/path/to/list or "--" for /sdcard/Download/migrator/packages.list] [--app] [--all] [--data] [--everything] [--magisk] [--new] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
 
 Delete backups (local and imported)
 -d|--delete <"bkp name (wildcards supported)" ...>
@@ -116,6 +116,9 @@ Manually enable SSAID apps
 
 
 EXAMPLES
+
+Backup only packages not yet backed up
+migrator -bn
 
 Backup Facebook Lite and Instagram (apps and data)
 migrator -b ook.lite,instagram
@@ -147,8 +150,8 @@ migrator -d "*facebook.lite*" "*instag*"
 Export all backups to /sdcard/Download/migrator/exported/
 migrator --export
 
-... To /storage/XXXX-XXXX/migrator/
-migrator -e -d /storage/XXXX-XXXX/migrator
+... To /storage/XXXX-XXXX/migrator_exported
+migrator -e -d /storage/XXXX-XXXX
 
 Interactive --export
 migrator -ei
