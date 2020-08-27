@@ -17,7 +17,7 @@ bkp_dir=/data/migrator/local
 packages=/data/system/packages
 data_dir=/sdcard/Download/migrator
 imports_dir=${bkp_dir%/*}/imported
-version="v2020.8.27-beta (202008270)"
+version="v2020.8.27-beta.1 (202008271)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 settings=/data/system/users/0/settings_
 ssaid_xml=${settings}ssaid.xml
@@ -546,6 +546,11 @@ case "$param1" in
   ;;
 
 
+  *-n*)
+    rm /data/data/*/shared_prefs/com.google.android.gms.appid.xml 2>/dev/null
+  ;;
+
+
   *-r*) # restore
 
     echo "Restoring"
@@ -640,7 +645,10 @@ case "$param1" in
           }
         fi
 
-        { t -d /data/data/$pkg && ls -d $pkg/$pkg/* > /dev/null 2>&1; } || continue
+        { t -d /data/data/$pkg && \
+          { ls -d $pkg/$pkg/* > /dev/null 2>&1 \
+            || ls -d $pkg/${pkg}_de/* > /dev/null 2>&1; }
+        } || continue
 
         if $everything || $all || tt "$param1" "-r*d*" || tt "$params" "*--data*"; then
           $app && echo "    Data" || printf "  $pkg\n    Data\n"
@@ -707,11 +715,13 @@ case "$param1" in
     if $everything || tt "$param1" "-r*s*" || tt "$params" "*--settings*"; then
       echo "  Generic Android Settings"
       for namespace in global secure system; do
+        grep -q '\$' $bkp_dir/_settings/$namespace.txt \
+          && sed -i 's/\$/\\$/g' $bkp_dir/_settings/$namespace.txt
         while IFS= read -r setting; do
           tt "$setting" "*[a-z]*" || continue
           grep -q " name=\"${setting%%=*}\" " ${settings}$namespace.xml && {
-            echo "    ${setting%%=*}=\"${setting#*=}\""
-            settings put $namespace ${setting%%=*} "${setting#*=}"
+            echo "    ${setting%%=*}=${setting#*=}"
+            settings put $namespace "${setting%%=*}" "${setting#*=}"
           }
         done < $bkp_dir/_settings/$namespace.txt
       done
@@ -724,7 +734,8 @@ case "$param1" in
         chown 1000:1000 /data/system/xlua
         chmod 0770 /data/system/xlua
       }
-      t -f $bkp_dir/_sysdata/restore.sh && . $bkp_dir/_sysdata/restore.sh
+      t -f $bkp_dir/_sysdata/restore.sh && \
+        . $bkp_dir/_sysdata/restore.sh > /dev/null 2>&1
     fi
 
     # restore magisk data
@@ -782,6 +793,66 @@ case "$param1" in
   ;;
 
 
+
+  wip) ###
+
+    exit 0
+
+    select_() {
+
+      local item=""
+      local list=""
+      local n=""
+      local _var_="$1"
+
+      shift
+      [ $# -gt 9 ] || n="-n 1"
+
+      for item in "$@"; do
+        list="$(printf "$list\n$item")"
+      done
+
+      list="$(echo "$list" | grep -v '^$' | nl -s ") " -w 1)"
+      printf "$list\n\n${PS3:-#? }"
+      read $n item
+      list="$(echo "$list" | sed -n "s|^${item}. ||p")"
+      list="$_var_=\"$list\""
+      eval "$list"
+    }
+
+    options
+      backup
+        User apps
+          all
+          specify comma-separated regex
+        Packages from a list
+          default
+          specify
+        new
+      delete
+        all
+        specify
+      export
+        all
+          defaults
+          dir
+          compress
+          encrypt
+        specify
+      import
+        default
+        dir
+      log
+      restore
+        all
+        specify
+        not intalled
+        imported
+      help
+  ;;
+
+
+
   *) # help text
     TMPDIR=/dev
     cd $TMPDIR
@@ -798,6 +869,7 @@ This is still in beta. Backup your data before using.
 
 USAGE
 
+${0##*/} (wizard)
 ${0##*/} [option...] [arg...]
 
 
@@ -820,6 +892,9 @@ List backups
 
 Export logs to $data_dir/migrator.log.bz2
 -L|--log
+
+Force all apps to reregister for push notifications (Google Cloud Messaging)
+-n|--notifications
 
 Restore backups
 -r[aAdEimnsD]|--restore [--app] [--all] [--data] [--everything] [--imported] [--magisk] [--not-installed] [--settings] [--sysdata] [regex|-v regex]
@@ -1037,7 +1112,7 @@ SYSTEM DATA (D)
 /data/misc/adb/adb_keys
 /data/misc/bluedroid/bt_config.conf
 /data/misc/wifi/WifiConfigStore.xml
-/data/misc/wifi softap.conf
+/data/misc/wifi/softap.conf
 /data/system/xlua/xlua.db*
 /data/system/users/0/photo.png
 /data/system/users/0/wallpaper*

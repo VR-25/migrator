@@ -14,7 +14,19 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
-2020.8.27-beta (202008270)
+v2020.8.27-beta.1 (202008271)
+
+Fixed restore "data_de only" not working (Android keyboard (AOSP) was affected).
+
+Fixed settings restore issues on Nougat.
+
+Force all apps to reregister for push notifications (Google Cloud Messaging)
+-n|--notifications
+
+Suppress unimportant errors when restoring system data (D).
+
+
+v2020.8.27-beta (202008270)
 
 Export backups to $base_dir/migrator_exported/ to prevent accidental data loss while auto-removing backups of uninstalled packages.
 
@@ -39,14 +51,6 @@ Skip unistalled packages from <list>".
 Unlike -rE, -bE now implies D too.
 Updated documentation.
 Updated bundled terminal (Magisk variant).
-
-
-v2020.8.17-beta (202008170)
-
-Enhanced auto-backup logic
-General fixes & optimizations
-More intuitive auto-backup config syntax
-Updated backup automation info (config, Tasker script and more)
 ```
 
 ---
@@ -73,7 +77,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --help
 
 ```
-Migrator v2020.8.26-beta (202008260)
+Migrator v2020.8.27-beta.1 (202008271)
 A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25
 License: GPLv3+
@@ -85,6 +89,7 @@ This is still in beta. Backup your data before using.
 
 USAGE
 
+migrator (wizard)
 migrator [option...] [arg...]
 
 
@@ -107,6 +112,9 @@ List backups
 
 Export logs to /sdcard/Download/migrator/migrator.log.bz2
 -L|--log
+
+Force all apps to reregister for push notifications (Google Cloud Messaging)
+-n|--notifications
 
 Restore backups
 -r[aAdEimnsD]|--restore [--app] [--all] [--data] [--everything] [--imported] [--magisk] [--not-installed] [--settings] [--sysdata] [regex|-v regex]
