@@ -1,4 +1,5 @@
-find and bundle static ccrypt binaries
-gms "can't read media"?
-direct export (no hard links)
-wizard
+Find and bundle static ccrypt binaries
+GMS "can't read media"?
+Direct export (no hard links)
+Wizard
+Some /data/adb/ symlinks (e.g., /data/adb/acc) are not backed uo or restored

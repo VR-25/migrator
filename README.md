@@ -14,6 +14,11 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.8.28-beta (202008280)
+
+Fixed compressed/encrypted export issues.
+
+
 v2020.8.27-beta.1 (202008271)
 
 Fixed restore "data_de only" not working (Android keyboard (AOSP) was affected).
@@ -33,24 +38,6 @@ Export backups to $base_dir/migrator_exported/ to prevent accidental data loss w
 Filter out packages already backed up ("M -bn" or "M -b --new").
 
 Misc safety patches
-
-
-v2020.8.26-beta (202008260)
-
-A comma can be used in place of "|" for regex alternation (e.g., "M -b faceb,instag,whatsa").
-
-Added tips on using rsync in auto-backup config to sync backups over an ssh tunnel.
-
-Read package names from list, with regex support (e.g., "M -b /path/to/file", "M -b --" (for /sdcard/Download/migrator/packages.list)).
-
-Remove backups of uninstalled apps from export directory as well.
-
-Don't overwrite the log file if its size is less than 2M.
-Performance enhancements
-Skip unistalled packages from <list>".
-Unlike -rE, -bE now implies D too.
-Updated documentation.
-Updated bundled terminal (Magisk variant).
 ```
 
 ---
@@ -77,7 +64,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --help
 
 ```
-Migrator v2020.8.27-beta.1 (202008271)
+Migrator v2020.8.28-beta (202008280)
 A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25
 License: GPLv3+

@@ -17,7 +17,7 @@ bkp_dir=/data/migrator/local
 packages=/data/system/packages
 data_dir=/sdcard/Download/migrator
 imports_dir=${bkp_dir%/*}/imported
-version="v2020.8.27-beta.1 (202008271)"
+version="v2020.8.28-beta (202008280)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 settings=/data/system/users/0/settings_
 ssaid_xml=${settings}ssaid.xml
@@ -450,9 +450,9 @@ case "$param1" in
     set +x
     ls -1 $dir 2>/dev/null \
       | grep -Ev '^_magisk\.|^migrator.sh$|^_settings\.|^_sysdata\.' | \
-      while IFS= read -r pkg; do
-        t -d $bkp_dir/${pkg%.*} || rm $dir/$pkg
-      done
+        while IFS= read -r bkp; do
+          t -d $bkp_dir/${bkp%.tar*} || rm $dir/$bkp
+        done
   ;;
 
 
