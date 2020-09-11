@@ -17,7 +17,7 @@ esac
 # create symlinks
 
 mkdir $MODPATH/system/bin
-ln -s /data/adb/modules/migrator/migrator.sh $MODPATH/system/bin/
+ln -s /data/adb/modules/migrator/migrator.sh $MODPATH/system/bin/migrator
 ln -s /data/adb/modules/migrator/migrator.sh $MODPATH/system/bin/M
 $BOOTMODE && ln -sf $MODPATH/migrator.sh /data/adb/modules/migrator/migrator.sh 2>/dev/null
 
@@ -25,12 +25,12 @@ exec_file=$MODPATH/migrator.sh
 sed 's|^#\!/.*|#\!/sbin/sh|' $exec_file > /data/M
 set_perm /data/M 0 0 0755
 if $BOOTMODE; then
-  ln -fs $exec_file /dev/
+  ln -fs $exec_file /dev/migrator
   ln -fs $exec_file /dev/M
   test -d /sbin && {
     /system/bin/mount -o remount,rw / 2>/dev/null \
       || mount -o remount,rw /
-    ln -fs $exec_file /sbin 2>/dev/null \
+    ln -fs $exec_file /sbin/migrator 2>/dev/null \
       && ln -fs $exec_file /sbin/M
   }
 else
@@ -70,3 +70,19 @@ $BOOTMODE && ! test -d /data/data/com.offsec.nhterm && {
   ui_print "- Installing NetHunter Terminal"
   pm install $MODPATH/system/app/com.offsec.nhterm/com.offsec.nhterm.apk > /dev/null
 }
+
+# copy README;
+data_dir=/sdcard/Download/migrator
+mkdir -p $data_dir
+cp -f $MODPATH/README.md $data_dir/
+
+# generate a sample packages.list
+test -f $data_dir/packages.list \
+  || echo "# Parsed by M -b --
+# Any package, including system's can be listed here
+# Extended grep regex is supported - meaning, writing full package nanes is not strictly necessary
+# For convenience/intuitiveness a comma can be used in place of '|', for alternation
+
+inputmethod.latin
+providers.userdictionary
+chrome,youtube,d.vending" > $data_dir/packages.list

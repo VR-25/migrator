@@ -1,5 +1,10 @@
 Find and bundle static ccrypt binaries
+
 GMS "can't read media"?
-Direct export (no hard links)
+
 Wizard
-Some /data/adb/ symlinks (e.g., /data/adb/acc) are not backed uo or restored
+
+Some /data/adb/ symlinks (e.g., /data/adb/acc) are not backed up/restored
+
+Issue on MIUI ROMs? Dirty flash required after Migrator install/upgrade?
+  automatic backups not working?

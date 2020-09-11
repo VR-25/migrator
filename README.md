@@ -14,6 +14,46 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.9.11-beta (202009110)
+
+- "-m" option and M sub-option (as in -beM) to move hard link backups to /data/media/0/, so that they survive factory resets.
+When launched without the -m (move) option, Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
+/data/migrator/ is inconvenient, but more private than /data/media/ and /data/media/0/.
+
+- Auto-generate sample /sdcard/Download/migrator/packages.list.
+
+- Backup/restore LineageOS-specific Android settings as well.
+
+- copy README.md to /sdcard/Download/migrator/.
+
+- Enforce Unix line endings (LF) in /data/migrator.conf before parsing it.
+This ensures config files written on Windows Notepad or other CRLF-loving editors still work as expected.
+
+- Exported backups are now imported to local/ as opposed to imported/ in /data/migrator/.
+This means the "i" flag, as in -ri is no longer necessary/valid.
+
+- Fixed: "migrator" executable inaccessible or not found.
+
+- Removed long options (e.g., --backup --app) to reduce overhead.
+Other performance enhancements were made on top of that.
+
+- System data (D) is no longer hard-linked.
+Regular copies are made instead.
+Android dislikes otherwise.
+
+- Two flags changed: A --> b (both (app and data)), E --> e (everything).
+
+- Updated documentation.
+This includes data migrator tutorial, flag mnemonics (e.g., -rb = restore both (app and data)) and more.
+As hard as the text may seem, read the damn thing anyway and give me some feedback on it... please!
+
+Release Notes
+  - MIUI users who face the "reboot to fastboot" issue should refrain from flashing the zip for now.
+  - I recommend extracting zip_file/migrator.sh and running it as is - until the cause of that issue is identified and eliminated.
+  - Usage example: "su -c sh /path/to/migrator.sh -be"
+  - An alias can be appended to Termux's .bashrc to save time and effort, e.g., alias M="su -c sh /sdcard/Download/migrator.sh".
+
+
 v2020.8.28-beta (202008280)
 
 Fixed compressed/encrypted export issues.
@@ -29,15 +69,6 @@ Force all apps to reregister for push notifications (Google Cloud Messaging)
 -n|--notifications
 
 Suppress unimportant errors when restoring system data (D).
-
-
-v2020.8.27-beta (202008270)
-
-Export backups to $base_dir/migrator_exported/ to prevent accidental data loss while auto-removing backups of uninstalled packages.
-
-Filter out packages already backed up ("M -bn" or "M -b --new").
-
-Misc safety patches
 ```
 
 ---
@@ -64,7 +95,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --help
 
 ```
-Migrator v2020.8.28-beta (202008280)
+Migrator v2020.9.11-beta (202009110)
 A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25
 License: GPLv3+
@@ -79,38 +110,60 @@ USAGE
 migrator (wizard)
 migrator [option...] [arg...]
 
+[p=<"password for encryption/decryption">] migrator [option...] [arg...]
 
-OPTIONS
+M is a migrator alias.
+
+
+OPTIONS[flags]
 
 Backup
--b[aAdDEmns]|--backup [/path/to/list or "--" for /sdcard/Download/migrator/packages.list] [--app] [--all] [--data] [--everything] [--magisk] [--new] [--settings] [--sysdata] [regex|-v regex] [+ file or full pkg names]
+-b[abdDemMns] [regex|-v regex] [[+ file or full pkg names] | [/path/to/list] | [-- for /sdcard/Download/migrator/packages.list]]
 
-Delete backups (local and imported)
--d|--delete <"bkp name (wildcards supported)" ...>
+Delete local backups
+-d <"bkp name (wildcards supported)" ...>
 
 Export backups
-[p=<"password for encryption">] -e[i]|--export[i] [regex|-v regex] [-d|--dir <destination directory>] [-c|--compressor <"compression method" or "-" (none, default)>]
+-e[i] [regex|-v regex] [-d <destination directory>] [-c <"compression method" or "-" (none, default)>]
 
 Import backups
-[p=<"password for decryption">] -i[i]|--import[i] [regex|-v regex] [-d|--dir <source directory>] [-c|--compressor <"decompression method" or "-" (none)>]
+-i [regex|-v regex] [-d <source directory>] [-c <"decompression method" or "-" (none)>]
+-ii [regex|-v regex] [-c <"decompression method" or "-" (none)>]
 
 List backups
--l|--list [regex|-v regex]
+-l [regex|-v regex]
 
 Export logs to /sdcard/Download/migrator/migrator.log.bz2
--L|--log
+-L
+
+Make hard link backups immune to factory resets
+-m
 
 Force all apps to reregister for push notifications (Google Cloud Messaging)
--n|--notifications
+-n
 
 Restore backups
--r[aAdEimnsD]|--restore [--app] [--all] [--data] [--everything] [--imported] [--magisk] [--not-installed] [--settings] [--sysdata] [regex|-v regex]
+-r[abdDemns] [regex|-v regex]
 
 Manually enable SSAID apps
--s|--ssaid
+-s
 
 
-EXAMPLES
+FLAG MNEMONICS
+
+a: app
+d: data
+b: both (app and data)
+D: system data
+m: magisk data
+M: move /data/migrator to /data/media/0/
+s: settings (global, secure and system)
+e: everything (-be = -bADms, -re = -rAms)
+i: interactive (-ei, -ii)
+n: not backed up (-bn) or not installed (-rn)
+
+
+USAGE EXAMPLES
 
 Backup only packages not yet backed up
 migrator -bn
@@ -128,36 +181,37 @@ Backup Magisk data (m) and generic Android settings (s)
 migrator -bms
 
 Backup everything
-migrator -bE + $(pm list packages -s | sed 's/^package://')
+migrator -be + $(pm list packages -s | sed 's/^package://')
 
-Backup everything, except system apps
-migrator -bE
+Backup everything, except system apps and move /data/migrator to /data/media/0/, so that hard link backups survive factory resets
+When launched without the -m (move) option, Migrator automatically moves hard link backups back to /data/migrator/local, for convenience
+migrator -beM
 
 Backup all users apps' data (d)
 migrator -bd
 
 Delete all backups
-migrator --delete \*
+migrator -d \*
 
 Delete Facebook Lite and Instagram backups
 migrator -d "*facebook.lite*" "*instag*"
 
 Export all backups to /sdcard/Download/migrator/exported/
-migrator --export
+migrator -e
 
 ... To /storage/XXXX-XXXX/migrator_exported
 migrator -e -d /storage/XXXX-XXXX
 
-Interactive --export
+Interactive export
 migrator -ei
 
 Import all backups from /sdcard/Download/migrator/exported
-migrator --import
+migrator -i
 
 ... From /storage/XXXX-XXXX/migrator
 migrator -i -d /storage/XXXX-XXXX/migrator
 
-Interactive --import
+Interactive import
 migrator -ii -d /sdcard/m
 
 Export backup, encrypted
@@ -167,16 +221,13 @@ Import encrypted backup
 p="my super secret password" migrator -i instagr
 
 List all backups
-migrator --list
+migrator -l
 
 List backups (filtered)
 migrator -l facebook.lite
 
-Restore only data of matched packages
-migrator --restore --data facebook.lite
-
-Restore matched imported backups (app and data)
-migrator -r --imported --app --data facebook.lite
+Restore only app data of matched packages
+migrator -rd facebook.lite
 
 Restore generic Android settings
 migrator -rs
@@ -188,9 +239,9 @@ Restore magisk data (everything in /data/adb/, except magisk/)
 migrator -rm
 
 Restore everything, except system data (D), which is usually incompatible)
-migrator -rE
+migrator -re
 
-Restore not-installed user apps+data)
+Restore not installed user apps+data
 migrator -rn
 
 
@@ -217,7 +268,7 @@ Backups are stored in /data/migrator/local/.
 These take virtually no extra storage space (hard links).
 
 Backups can be exported as indivudual [compressed] archives (highly recommended).
-Data is exported to /sdcard/Download/migrator/exported/ by default - and imported to "/data/migrator/imported/".
+Data is exported to /sdcard/Download/migrator/exported/ by default - and imported to "/data/migrator/local/".
 The default compression method is <none> (.tar file).
 Method here refers to "<program> <options>" (e.g., "zstd -1").
 The decompression/extraction method to use is automatically determined based on file extension.
@@ -256,15 +307,15 @@ AUTOMATING BACKUPS
 
 "init.d" Script (Magisk users don't need this)
 #!/system/bin/sh
-# This is a script that daemonizes "migrator --boot" to automate backups.
-/path/to/busybox start-stop-daemon -bx /path/to/migrator -S -- --boot
+# This is a script that daemonizes "migrator -B" to automate backups.
+/path/to/busybox start-stop-daemon -bx /path/to/migrator -S -- -B
 exit 0
 
 Config for Magisk and init.d
 # /data/migrator.conf
 # Default config, same as a blank file
 # Note: this is not created automatically.
-cmd="migrator -bE && migrator -e" # Commands to run
+cmd="migrator -be && migrator -e" # Commands to run
 freq=24 # Every 24 hours
 delay=60 # Starting 60 minutes after boot
 
@@ -273,8 +324,8 @@ Sample Tasker Script
 # /data/my-tasker-script
 # su -c /data/my-tasker-script
 # This requires read and execute permissions to run
-(migrator -bE
-migrator -e -d /storage/XXXX-XXXX/my-backups &)
+(migrator -be
+migrator -e -d /storage/XXXX-XXXX &)
 
 Debugging
 Verbose is redirected to "/dev/migrator.log".
@@ -282,44 +333,35 @@ Verbose is redirected to "/dev/migrator.log".
 
 FULL DATA MIGRATION STEPS AND NOTES
 
-1. Backup everything, except system apps: "migrator -bE".
+1. Backup everything, except system apps: "migrator -beM".
 
-1.1. Export the backups to external storage: "migrator -e -d /storage/XXXX-XXXX/my-backups".
-This is highly recommended - and particularly important if the data partition is encrypted.
-Following this renders steps 2 and 4 optional.
+2. Install the [new] ROM (factory reset implied), addons as desired - and root it.
 
-2. Move local (hard link type) backups to /data/media/0/: "mv /data/migrator /data/media/0)".
-Otherwise, wiping /data (excluding /data/media) will remove the backups as well.
-Data loss WARNING: do NOT move to /sdcard/! It has a different filesystem.
-
-3. Install the [new] ROM (factory reset implied), addons as desired - and root it.
-
-4. Move hard link backups back to /data/: "mv /data/media/0/migrator /data/".
-
-4.1. If something goes wrong with the moving process, import the backups from external storage: "migrator -i -d /storage/XXXX-XXXX/my-backups".
-
-5. Once Android boots, flash migrator from Magisk Manager.
+3. Once Android boots, flash migrator from Magisk Manager.
 Rebooting is not required.
 
-6. Launch NetHunter Terminal (bundled), select "AndroidSu" shell and run "migrator -rE" or "/dev/migrator -rE" to restore data.
-Notes: if you followed step 4.1, specify the "i" or "--imported" flag (e.g, -rAims) to restore imported backups.
+6. Restore all apps+data, settings and Magisk data: "migrator -re".
 
 7. Launch Magisk Manager and disable/remove all restored modules that are or may be incompatible with the [new] ROM.
 
 8. Reboot.
 
-If you use a different root method, ignore Magisk-related steps.
-
-Remember that using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
+Notes
+- If you use a different root method, ignore Magisk-related steps.
+- In "-beM", the "M" sub-option means "move hard link backups to /data/media/0/, so that they survive factory resets".
+  When launched without the -m (move) option (i.e., migrator -m), Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
+- Using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
 
 
 SYSTEM DATA (D)
+
+If you find any issue after restoring system data (-rD), remove the associated files with "su -c rm <line>".
 
 /data/system_?e/0/accounts_?e.db*
 /data/misc/adb/adb_keys
 /data/misc/bluedroid/bt_config.conf
 /data/misc/wifi/WifiConfigStore.xml
-/data/misc/wifi softap.conf
+/data/misc/wifi/softap.conf
 /data/system/xlua/xlua.db*
 /data/system/users/0/photo.png
 /data/system/users/0/wallpaper*
@@ -338,5 +380,5 @@ Most operations work in recovery environments as well.
 One can either flash the Magisk module [again] to have migrator and M commands available, or run "/data/M".
 
 rsync can be used in auto-backup config to sync backups over an ssh tunnel.
-e.g., cmd="migrator -bE && rsync -a --del $bkp_dir vr25@192.168.1.33:migrator"
+e.g., cmd="migrator -be && rsync -a --del $bkp_dir vr25@192.168.1.33:migrator"
 ```
