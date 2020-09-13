@@ -14,9 +14,22 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.9.13-beta.1 (202009131)
+
+- Enhanced system data backup and restore logic.
+- General fixes & optimizations
+- Parse "codePath" from /data/system/package.xml.
+- Updated data migration tutorial.
+
+Release Notes
+  - Please test whether system data backup and restore work as expected.
+  - This version fixes several issues that affected encrypted devices and Android 11 in particular.
+  - Nothing was done in regards to the "MIUI 12" bootloop issue. The root cause is still unknown.
+
+
 v2020.9.11-beta (202009110)
 
-- "-m" option and M sub-option (as in -beM) to move hard link backups to /data/media/0/, so that they survive factory resets.
+- "-m" option and M sub-option (as in -beM) to move hard link backups to internal sdcard, so that they survive factory resets.
 When launched without the -m (move) option, Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
 /data/migrator/ is inconvenient, but more private than /data/media/ and /data/media/0/.
 
@@ -57,18 +70,6 @@ Release Notes
 v2020.8.28-beta (202008280)
 
 Fixed compressed/encrypted export issues.
-
-
-v2020.8.27-beta.1 (202008271)
-
-Fixed restore "data_de only" not working (Android keyboard (AOSP) was affected).
-
-Fixed settings restore issues on Nougat.
-
-Force all apps to reregister for push notifications (Google Cloud Messaging)
--n|--notifications
-
-Suppress unimportant errors when restoring system data (D).
 ```
 
 ---
@@ -95,7 +96,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --help
 
 ```
-Migrator v2020.9.11-beta (202009110)
+Migrator v2020.9.13-beta.1 (202009131)
 A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25
 License: GPLv3+
@@ -156,7 +157,7 @@ d: data
 b: both (app and data)
 D: system data
 m: magisk data
-M: move /data/migrator to /data/media/0/
+M: move /data/migrator to internal sdcard
 s: settings (global, secure and system)
 e: everything (-be = -bADms, -re = -rAms)
 i: interactive (-ei, -ii)
@@ -183,7 +184,7 @@ migrator -bms
 Backup everything
 migrator -be + $(pm list packages -s | sed 's/^package://')
 
-Backup everything, except system apps and move /data/migrator to /data/media/0/, so that hard link backups survive factory resets
+Backup everything, except system apps and move /data/migrator to internal sdcard, so that hard link backups survive factory resets
 When launched without the -m (move) option, Migrator automatically moves hard link backups back to /data/migrator/local, for convenience
 migrator -beM
 
@@ -208,8 +209,8 @@ migrator -ei
 Import all backups from /sdcard/Download/migrator/exported
 migrator -i
 
-... From /storage/XXXX-XXXX/migrator
-migrator -i -d /storage/XXXX-XXXX/migrator
+... From /storage/XXXX-XXXX/migrator_exported
+migrator -i -d /storage/XXXX-XXXX/migrator_exported
 
 Interactive import
 migrator -ii -d /sdcard/m
@@ -235,7 +236,7 @@ migrator -rs
 Restore system data (e.g., Wi-Fi, Bluetooth)
 migrator -rD
 
-Restore magisk data (everything in /data/adb/, except magisk/)
+Restore Magisk data (everything in /data/adb/, except magisk/)
 migrator -rm
 
 Restore everything, except system data (D), which is usually incompatible)
@@ -267,7 +268,7 @@ Migrator itself is included in backups and exported alongside backup archives.
 Backups are stored in /data/migrator/local/.
 These take virtually no extra storage space (hard links).
 
-Backups can be exported as indivudual [compressed] archives (highly recommended).
+Backups can be exported as individual [compressed] archives (highly recommended).
 Data is exported to /sdcard/Download/migrator/exported/ by default - and imported to "/data/migrator/local/".
 The default compression method is <none> (.tar file).
 Method here refers to "<program> <options>" (e.g., "zstd -1").
@@ -333,6 +334,13 @@ Verbose is redirected to "/dev/migrator.log".
 
 FULL DATA MIGRATION STEPS AND NOTES
 
+Notes
+- If you have to format data, export backups to external storage after step 1 below (-e -d /storage/XXXX-XXXX) and later import with -i -d storage/XXXX-XXXX).
+- If you use a different root method, ignore Magisk-related steps.
+- In "-beM", the "M" sub-option means "move hard link backups to internal sdcard, so that they survive factory resets".
+  When launched without the -m (move) option (i.e., migrator -m), Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
+- Using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
+
 1. Backup everything, except system apps: "migrator -beM".
 
 2. Install the [new] ROM (factory reset implied), addons as desired - and root it.
@@ -345,12 +353,6 @@ Rebooting is not required.
 7. Launch Magisk Manager and disable/remove all restored modules that are or may be incompatible with the [new] ROM.
 
 8. Reboot.
-
-Notes
-- If you use a different root method, ignore Magisk-related steps.
-- In "-beM", the "M" sub-option means "move hard link backups to /data/media/0/, so that they survive factory resets".
-  When launched without the -m (move) option (i.e., migrator -m), Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
-- Using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
 
 
 SYSTEM DATA (D)
@@ -379,6 +381,6 @@ That's the first field in migrator's $PATH.
 Most operations work in recovery environments as well.
 One can either flash the Magisk module [again] to have migrator and M commands available, or run "/data/M".
 
-rsync can be used in auto-backup config to sync backups over an ssh tunnel.
+rsync can be used in auto-backup config to sync backups over an SSH tunnel.
 e.g., cmd="migrator -be && rsync -a --del $bkp_dir vr25@192.168.1.33:migrator"
 ```

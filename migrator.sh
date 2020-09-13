@@ -15,8 +15,8 @@ log=/dev/migrator.log
 tmp=/dev/migrator.tmp
 bkp_dir=/data/migrator/local
 data_dir=/sdcard/Download/migrator
-packages=/data/system/packages
-version="v2020.9.11-beta (202009110)"
+packages=/data/system/packages.
+version="v2020.9.13-beta.1 (202009131)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 settings=/data/system/users/0/settings_
 ssaid_xml=${settings}ssaid.xml
@@ -33,6 +33,19 @@ sysdata="/data/system_?e/0/accounts_?e.db*
 /data/system/users/0/wallpaper*
 /data/user*/0/com.android.*provider*/databases/*.db*
 /data/system/deviceidle.xml"
+
+
+get_apk_dir() {
+  grep " name=\"$1\" codePath=" ${packages}xml | awk '{print $3}' | sed -e 's/codePath=\"//' -e s/\"//
+}
+
+
+mv_bkps() {
+  t -d /data/media/0/.migrator || {
+    mv ${bkp_dir%/*} /data/media/0/.migrator 2>/dev/null \
+      || mv ${bkp_dir%/*} /data/media/.migrator
+  }
+}
 
 
 parse_params() {
@@ -122,7 +135,7 @@ pgrep -f zygote > /dev/null || {
   clear
   recovery_mode=true
   trap 'exit_code=$?; set +x; rm ${tmp}* 2>/dev/null; echo; exit $exit_code' EXIT
-  tt "$param1" "-B|-r|-s" && {
+  tt "$param1" "-[Brs]*" && {
     echo "This option is not meant for recovery environments"
     exit 1
   }
@@ -150,7 +163,7 @@ $recovery_mode || {
 }
 
 
-tt "$param1" "-[br]|-[br]*[bn]*" && both=true || both=false
+tt "$param1" "-[br]|-[br]*[bMn]*" && both=true || both=false
 
 
 if t -n "${p-}"; then
@@ -169,9 +182,10 @@ fi
 
 
 # move the backup directory back to where it belongs
-! tt "$param1" "-m" \
-  && t -d /data/media/0/migrator/local \
-  && mv /data/media/0/migrator /data/ 2>/dev/null
+! tt "$param1" "-m" && ! t -d /data/migrator && {
+  mv /data/media/0/.migrator /data/migrator \
+    || mv /data/media/.migrator /data/migrator
+} 2>/dev/null
 
 
 case "$param1" in
@@ -199,7 +213,7 @@ case "$param1" in
     else
       no_list=true
       if $recovery_mode; then
-        grep 'name=.*codePath="/data/app/' ${packages}.xml \
+        grep 'name=.*codePath="/data/app/' ${packages}xml \
           | grep -v com.offsec.nhterm \
           | grep -E$v "${regex:-..}" \
           | awk '{print $2}' | tr -d \" \
@@ -215,7 +229,7 @@ case "$param1" in
     $no_list || {
       # parse regex and generate full package names
       (set +x
-      cut -d ' ' -f 1 ${packages}.list > ${tmp}1
+      cut -d ' ' -f 1 ${packages}list > ${tmp}1
       : > ${tmp}2
       while IFS= read -r l; do
        grep -E "$l" ${tmp}1 >> ${tmp}2
@@ -246,7 +260,7 @@ case "$param1" in
       # filter out unistalled packages
       (set +x
       while IFS= read -r l; do
-        grep -q "^$l " ${packages}.list || sed -i "/^$l$/d" $tmp
+        grep -q "^$l " ${packages}list || sed -i "/^$l$/d" $tmp
       done < $tmp)
     }
 
@@ -275,7 +289,7 @@ case "$param1" in
       app=false
       if $both || tt "$param1" "-b*[ae]*"; then
         rm $bkp_dir/$pkg/*.apk
-        ln /data/app/${pkg}-*/*.apk $bkp_dir/$pkg/ && {
+        ln $(get_apk_dir $pkg)/*.apk $bkp_dir/$pkg/ && {
           app=true
           printf "  $pkg\n    App\n"
         }
@@ -365,8 +379,7 @@ case "$param1" in
       while IFS= read -r l; do
         for i in $l; do
           cp $i $bkp_dir/_sysdata/ 2>/dev/null || continue
-          stat -c "cp -f $bkp_dir/_sysdata/${i##*/} %n && { chown %U:%G %n; chmod %a %n; /system/bin/restorecon %n; }" \
-            $i >> $bkp_dir/_sysdata/restore.sh
+          echo "[ -f $i ] && cat $bkp_dir/_sysdata/${i##*/} > $i" >> $bkp_dir/_sysdata/restore.sh
         done
       done < $tmp
     fi
@@ -391,11 +404,11 @@ case "$param1" in
     ls -1 $bkp_dir 2>/dev/null \
       | grep -Ev '^_magisk$|^migrator.sh$|^_settings|^_sysdata$' | \
       while IFS= read -r pkg; do
-        grep -q "^$pkg " ${packages}.list || rm -rf $bkp_dir/$pkg
+        grep -q "^$pkg " ${packages}list || rm -rf $bkp_dir/$pkg
       done
 
-    # move the backup directory to prepare for ROM migration
-    tt "$param1" "*M*" && mv ${bkp_dir%/*} /data/media/0/
+    # make hard link backups immune to factory resets
+    tt "$param1" "*M*" && mv_bkps
   ;;
 
 
@@ -581,7 +594,7 @@ case "$param1" in
           t -n "$i" || continue
           printf "  $i"
           tt "$i" "_*" && echo || {
-            grep -q "$i " ${packages}.list && echo " (installed)" || echo
+            grep -q "$i " ${packages}list && echo " (installed)" || echo
           }
           if t -f $1/$i/base.apk; then
             if ls -d $1/$i/$i/* > /dev/null 2>&1; then
@@ -606,7 +619,7 @@ case "$param1" in
 
 
   -m) # make hard link backups immune to factory resets
-    t -d /data/media/0/migrator || mv ${bkp_dir%/*} /data/media/0/
+    mv_bkps
   ;;
 
 
@@ -630,7 +643,7 @@ case "$param1" in
     if $both || tt "$param1" "-r*[ade]*"; then
 
       # set the stage for SSAIDs restore
-      if grep -q '^com.google.android.gms ' ${packages}.list \
+      if grep -q '^com.google.android.gms ' ${packages}list \
         && t -f $ssaid_xml && ls */ssaid.txt > /dev/null 2>&1
       then
         no_ssaid=false
@@ -642,22 +655,9 @@ case "$param1" in
 
 
       # enable "unknown sources" and disable package verification
-
-      if grep -q ' name="install_non_market_apps" ' ${settings}secure.xml \
-        && ! grep -q ' name="install_non_market_apps" value="1" ' ${settings}secure.xml
-      then
+      if $both || tt "$param1" "-r*[ae]*"; then
         settings put secure install_non_market_apps 1
-      fi
-
-      if grep -q ' name="verifier_verify_adb_installs" ' ${settings}global.xml \
-        && ! grep -q ' name="verifier_verify_adb_installs" value="0" ' ${settings}global.xml
-      then
         settings put global verifier_verify_adb_installs 0
-      fi
-
-      if grep -q ' name="package_verifier_enable" ' ${settings}global.xml \
-        && ! grep -q ' name="package_verifier_enable" value="0" ' ${settings}global.xml
-      then
         settings put global package_verifier_enable 0
       fi
 
@@ -670,7 +670,7 @@ case "$param1" in
         # exclude installed apps
         while IFS= read -r i; do
           tt "$i" "*[a-z]*" || continue
-          grep -q "$i " ${packages}.list && sed -i "/^$i$/d" $tmp
+          grep -q "$i " ${packages}list && sed -i "/^$i$/d" $tmp
         done < $tmp
       }
 
@@ -690,13 +690,13 @@ case "$param1" in
           # base APK
           pm install -r  -i com.android.vending $pkg/base.apk > /dev/null && {
             rm $pkg/base.apk
-            ln /data/app/${pkg}-*/base.apk $pkg/
+            ln $(get_apk_dir $pkg)/base.apk $pkg/
             # split APKs
             ls $pkg/split_*.apk > /dev/null 2>&1 && {
               for pkg_ in $pkg/split_*.apk; do
                 pm install -r -i com.android.vending -p $pkg $pkg_ > /dev/null && {
                   rm $pkg_
-                  ln /data/app/${pkg}-*/${pkg_##*/} $pkg/
+                  ln $(get_apk_dir $pkg)/${pkg_##*/} $pkg/
                 }
               done
             }
@@ -803,15 +803,14 @@ case "$param1" in
     fi
 
     # restore system data
-    if t -d $bkp_dir/_sysdata && tt "$param1" "-r*D*"; then
+    if t -f $bkp_dir/_sysdata/restore.sh && tt "$param1" "-r*D*"; then
       echo "  System Data"
-      t -d /data/data/eu.faircode.xlua \
+      grep -q '^eu.faircode.xlua ' ${packages}list \
         && mkdir /data/system/xlua 2>/dev/null && {
           chown 1000:1000 /data/system/xlua
           chmod 0770 /data/system/xlua
         }
-      t -f $bkp_dir/_sysdata/restore.sh && \
-        . $bkp_dir/_sysdata/restore.sh > /dev/null 2>&1
+      . $bkp_dir/_sysdata/restore.sh > /dev/null 2>&1
     fi
 
     # restore magisk data
@@ -957,7 +956,7 @@ d: data
 b: both (app and data)
 D: system data
 m: magisk data
-M: move ${bkp_dir%/*} to /data/media/0/
+M: move ${bkp_dir%/*} to internal sdcard
 s: settings (global, secure and system)
 e: everything (-be = -bADms, -re = -rAms)
 i: interactive (-ei, -ii)
@@ -984,7 +983,7 @@ ${0##*/} -bms
 Backup everything
 ${0##*/} -be + \$(pm list packages -s | sed 's/^package://')
 
-Backup everything, except system apps and move ${bkp_dir%/*} to /data/media/0/, so that hard link backups survive factory resets
+Backup everything, except system apps and move ${bkp_dir%/*} to internal sdcard, so that hard link backups survive factory resets
 When launched without the -m (move) option, Migrator automatically moves hard link backups back to $bkp_dir, for convenience
 ${0##*/} -beM
 
@@ -1009,8 +1008,8 @@ ${0##*/} -ei
 Import all backups from $data_dir/exported
 ${0##*/} -i
 
-... From /storage/XXXX-XXXX/migrator
-${0##*/} -i -d /storage/XXXX-XXXX/migrator
+... From /storage/XXXX-XXXX/migrator_exported
+${0##*/} -i -d /storage/XXXX-XXXX/migrator_exported
 
 Interactive import
 ${0##*/} -ii -d /sdcard/m
@@ -1036,7 +1035,7 @@ ${0##*/} -rs
 Restore system data (e.g., Wi-Fi, Bluetooth)
 ${0##*/} -rD
 
-Restore magisk data (everything in /data/adb/, except magisk/)
+Restore Magisk data (everything in /data/adb/, except magisk/)
 ${0##*/} -rm
 
 Restore everything, except system data (D), which is usually incompatible)
@@ -1068,7 +1067,7 @@ Migrator itself is included in backups and exported alongside backup archives.
 Backups are stored in $bkp_dir/.
 These take virtually no extra storage space (hard links).
 
-Backups can be exported as indivudual [compressed] archives (highly recommended).
+Backups can be exported as individual [compressed] archives (highly recommended).
 Data is exported to $data_dir/exported/ by default - and imported to "$bkp_dir/".
 The default compression method is <none> (.tar file).
 Method here refers to "<program> <options>" (e.g., "zstd -1").
@@ -1134,6 +1133,13 @@ Verbose is redirected to "$log".
 
 FULL DATA MIGRATION STEPS AND NOTES
 
+Notes
+- If you have to format data, export backups to external storage after step 1 below (-e -d /storage/XXXX-XXXX) and later import with -i -d storage/XXXX-XXXX).
+- If you use a different root method, ignore Magisk-related steps.
+- In "-beM", the "M" sub-option means "move hard link backups to internal sdcard, so that they survive factory resets".
+  When launched without the -m (move) option (i.e., migrator -m), Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
+- Using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
+
 1. Backup everything, except system apps: "${0##*/} -beM".
 
 2. Install the [new] ROM (factory reset implied), addons as desired - and root it.
@@ -1146,12 +1152,6 @@ Rebooting is not required.
 7. Launch Magisk Manager and disable/remove all restored modules that are or may be incompatible with the [new] ROM.
 
 8. Reboot.
-
-Notes
-- If you use a different root method, ignore Magisk-related steps.
-- In "-beM", the "M" sub-option means "move hard link backups to /data/media/0/, so that they survive factory resets".
-  When launched without the -m (move) option (i.e., ${0##*/} -m), Migrator automatically moves hard link backups back to ${bkp_dir}/, for convenience.
-- Using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
 
 
 SYSTEM DATA (D)
@@ -1180,7 +1180,7 @@ That's the first field in migrator's \$PATH.
 Most operations work in recovery environments as well.
 One can either flash the Magisk module [again] to have migrator and M commands available, or run "/data/M".
 
-rsync can be used in auto-backup config to sync backups over an ssh tunnel.
+rsync can be used in auto-backup config to sync backups over an SSH tunnel.
 e.g., cmd="${0##*/} -be && rsync -a --del \$bkp_dir vr25@192.168.1.33:migrator"
 EOF
   ;;
