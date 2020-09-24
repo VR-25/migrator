@@ -14,6 +14,12 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
+v2020.9.24-beta (202009240)
+
+- Do not remount / rw if it's not tmpfs.
+- Fixed backup import issue.
+
+
 v2020.9.13-beta.1 (202009131)
 
 - Enhanced system data backup and restore logic.
@@ -65,11 +71,6 @@ Release Notes
   - I recommend extracting zip_file/migrator.sh and running it as is - until the cause of that issue is identified and eliminated.
   - Usage example: "su -c sh /path/to/migrator.sh -be"
   - An alias can be appended to Termux's .bashrc to save time and effort, e.g., alias M="su -c sh /sdcard/Download/migrator.sh".
-
-
-v2020.8.28-beta (202008280)
-
-Fixed compressed/encrypted export issues.
 ```
 
 ---
@@ -96,7 +97,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ## --help
 
 ```
-Migrator v2020.9.13-beta.1 (202009131)
+Migrator v2020.9.24-beta (202009240)
 A Backup Solution and Data Migration Utility for Android
 Copyright 2018-2020, VR25
 License: GPLv3+

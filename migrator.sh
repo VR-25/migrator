@@ -16,7 +16,7 @@ tmp=/dev/migrator.tmp
 bkp_dir=/data/migrator/local
 data_dir=/sdcard/Download/migrator
 packages=/data/system/packages.
-version="v2020.9.13-beta.1 (202009131)"
+version="v2020.9.24-beta (202009240)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 settings=/data/system/users/0/settings_
 ssaid_xml=${settings}ssaid.xml
@@ -36,7 +36,9 @@ sysdata="/data/system_?e/0/accounts_?e.db*
 
 
 get_apk_dir() {
-  grep " name=\"$1\" codePath=" ${packages}xml | awk '{print $3}' | sed -e 's/codePath=\"//' -e s/\"//
+  grep " name=\"$1\" codePath=" ${packages}xml \
+    | awk '{print $3}' \
+    | sed -e 's/codePath=\"//' -e s/\"//
 }
 
 
@@ -581,7 +583,7 @@ case "$param1" in
           *) decrypt $compressor | tar -xf - -C $bkp_dir;;
         esac
       done
-    cp -f migrator.sh $bkp_dir /
+    cp -f migrator.sh $bkp_dir/
   ;;
 
 

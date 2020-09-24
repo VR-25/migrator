@@ -28,7 +28,8 @@ if $BOOTMODE; then
   ln -fs $exec_file /dev/migrator
   ln -fs $exec_file /dev/M
   test -d /sbin && {
-    /system/bin/mount -o remount,rw / 2>/dev/null \
+    ! grep -q "^tmpfs / " /proc/mounts \
+      || /system/bin/mount -o remount,rw / 2>/dev/null \
       || mount -o remount,rw /
     ln -fs $exec_file /sbin/migrator 2>/dev/null \
       && ln -fs $exec_file /sbin/M
