@@ -732,9 +732,13 @@ case "$param1" in
           # restore data
           ls -d $pkg/${pkg}_de/* > /dev/null 2>&1 \
             && de=/data/user_de/0/${pkg}::${pkg}_de || de=
-          for i in /data/data/${pkg}::$pkg $de; do
+          ls -d $pkg/${pkg}_media/* > /dev/null 2>&1 \
+              && media=/data/media/0/Android/data/${pkg}::${pkg}_media || media=
+          for i in /data/data/${pkg}::$pkg $de $media; do
             lib_dir=$(readlink ${i%::*}/lib)
-            set -- $(stat -c "%u:%g %a" ${i%::*})
+            if ! tt "$i" "*media"; then
+              set -- $(stat -c "%u:%g %a" ${i%::*})
+            fi
             rm -rf ${i%::*} 2>/dev/null
             if ln /data/.__hltest ${i%::*} 2>/dev/null; then
               rm ${i%::*}
@@ -747,8 +751,13 @@ case "$param1" in
             fi
             t -n "$lib_dir" && ln -sf $lib_dir ${i%::*}/lib
             # restore attributes
-            chown -R $1 ${i%::*}
-            chmod $2 ${i%::*}
+            if tt "$i" "*media"; then
+              user=$(stat -c "%U" /data/data/$pkg)
+              chown -R media_rw:${user}_ext ${i%::*}
+            else
+              chown -R $1 ${i%::*}
+              chmod $2 ${i%::*}
+            fi
           done
           rm -rf /dev/._split 2>/dev/null
           mkdir /dev/._split
