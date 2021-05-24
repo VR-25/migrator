@@ -756,6 +756,7 @@ case "$param1" in
           ls  -1 /dev/._split | while IFS= read -r f; do
             t -f /dev/._split/$f && .  /dev/._split/$f 2>/dev/null
           done
+          /system/bin/restorecon -R /data/data/$pkg > /dev/null 2>&1
           /system/bin/restorecon -R /data/user*/0/$pkg > /dev/null 2>&1
         fi
 
