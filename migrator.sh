@@ -301,10 +301,11 @@ case "$param1" in
       if $both || tt "$param1" "-b*[de]*"; then
         $app && echo "    Data" || printf "  $pkg\n    Data\n"
         killall -STOP $pkg > /dev/null 2>&1
-        rm -rf $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de 2>/dev/null
-        mkdir $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de
+        rm -rf $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de $bkp_dir/$pkg/${pkg}_media 2>/dev/null
+        mkdir $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de $bkp_dir/$pkg/${pkg}_media
         : > $bkp_dir/$pkg/modes.txt
-        for e in /data/data/${pkg}::$pkg /data/user_de/0/${pkg}::${pkg}_de; do
+        for e in /data/data/${pkg}::$pkg /data/user_de/0/${pkg}::${pkg}_de /data/media/0/Android/data/${pkg}::${pkg}_media; do
+          echo $e
           ls -1d ${e%::*}/* ${e%::*}/.* 2>/dev/null \
             | grep -Ev '/\.$|/\.\.$|/app_optimized|/app_tmp|/cache$|/code_cache$|/dex$|/lib$|oat$' | \
             while IFS= read -r i; do
