@@ -837,11 +837,16 @@ case "$param1" in
            echo "    Installing: $target_file"
            cat $bkp_file > $target_file
          else
-           if tt "$bkp_file" "*wallpaper*"; then
+           if tt "$target_file" "/data/system/users*"; then
              echo "    Installing (plus fixing ownership & permissions): $target_file"
              cp $bkp_file $target_file
              chown system:system $target_file
              chmod 0600 $target_file
+          elif tt "$target_file" "/data/*/apexdata/com.android.wifi/WifiConfigStoreSoftAp.xml"; then
+            echo "    Installing (plus fixing ownership & permissions): $target_file"
+            cp $bkp_file $target_file
+            chown system:system $target_file
+            chmod 0600 $target_file
           else
             echo "    WARNING: File does not exist, do not know how to handle ownership & permissions, skipping install: $target_file"
           fi
