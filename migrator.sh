@@ -31,7 +31,8 @@ sysdata="/data/system_?e/0/accounts_?e.db*
 /data/system/xlua/xlua.db*
 /data/system/users/0/photo.png
 /data/system/users/0/wallpaper*
-/data/user*/0/com.android.*provider*/databases/*.db*
+/data/user_de/0/com.android.*provider*/databases/*.db*
+/data/data/com.android.*provider*/databases/*.db*
 /data/system/deviceidle.xml"
 
 
