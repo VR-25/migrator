@@ -823,7 +823,27 @@ case "$param1" in
           chown 1000:1000 /data/system/xlua
           chmod 0770 /data/system/xlua
         }
-      . $bkp_dir/_sysdata/restore.sh > /dev/null 2>&1
+      #. $bkp_dir/_sysdata/restore.sh > /dev/null 2>&1
+      for i in $(cat  $bkp_dir/_sysdata/restore.sh | awk '{ print $3 "::" $7 }'); do
+         #echo $i
+         target_file=${i%::*}
+         bkp_file=${i#*::}
+         #echo $bkp_file
+         if [ -f $target_file ]; then
+           echo "    Installing: $target_file"
+           cat $bkp_file > $target_file
+         else
+           if tt "$bkp_file" "*wallpaper*"; then
+             echo "    Installing (plus fixing ownership & permissions): $target_file"
+             cp $bkp_file $target_file
+             chown system:system $target_file
+             chmod 0600 $target_file
+          else
+            echo "    WARNING: File does not exist, do not know how to handle ownership & permissions, skipping install: $target_file"
+          fi
+         fi
+         #ls -al $(dirname $target_file)
+      done
     fi
 
     # restore magisk data
