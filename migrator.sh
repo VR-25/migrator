@@ -26,12 +26,17 @@ sysdata="/data/system_?e/0/accounts_?e.db*
 /data/system/sync/accounts.xml
 /data/misc/adb/adb*_keys*
 /data/misc/bluedroid/bt_config.*
+/data/misc/apexdata/com.android.wifi/WifiConfigStoreSoftAp.xml
+/data/misc/apexdata/com.android.wifi/WifiConfigStore.xml
 /data/misc/wifi/WifiConfigStore.xml
 /data/misc/wifi/softap.conf
 /data/system/xlua/xlua.db*
 /data/system/users/0/photo.png
+/data/system/users/0/appwidgets.xml
+/data/system/users/0/roles.xml
 /data/system/users/0/wallpaper*
-/data/user*/0/com.android.*provider*/databases/*.db*
+/data/user_de/0/com.android.*provider*/databases/*.db*
+/data/data/com.android.*provider*/databases/*.db*
 /data/system/deviceidle.xml"
 
 
@@ -301,10 +306,10 @@ case "$param1" in
       if $both || tt "$param1" "-b*[de]*"; then
         $app && echo "    Data" || printf "  $pkg\n    Data\n"
         killall -STOP $pkg > /dev/null 2>&1
-        rm -rf $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de 2>/dev/null
-        mkdir $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de
+        rm -rf $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de $bkp_dir/$pkg/${pkg}_media 2>/dev/null
+        mkdir $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de $bkp_dir/$pkg/${pkg}_media
         : > $bkp_dir/$pkg/modes.txt
-        for e in /data/data/${pkg}::$pkg /data/user_de/0/${pkg}::${pkg}_de; do
+        for e in /data/data/${pkg}::$pkg /data/user_de/0/${pkg}::${pkg}_de /data/media/0/Android/data/${pkg}::${pkg}_media; do
           ls -1d ${e%::*}/* ${e%::*}/.* 2>/dev/null \
             | grep -Ev '/\.$|/\.\.$|/app_optimized|/app_tmp|/cache$|/code_cache$|/dex$|/lib$|oat$' | \
             while IFS= read -r i; do
@@ -731,9 +736,13 @@ case "$param1" in
           # restore data
           ls -d $pkg/${pkg}_de/* > /dev/null 2>&1 \
             && de=/data/user_de/0/${pkg}::${pkg}_de || de=
-          for i in /data/data/${pkg}::$pkg $de; do
+          ls -d $pkg/${pkg}_media/* > /dev/null 2>&1 \
+              && media=/data/media/0/Android/data/${pkg}::${pkg}_media || media=
+          for i in /data/data/${pkg}::$pkg $de $media; do
             lib_dir=$(readlink ${i%::*}/lib)
-            set -- $(stat -c "%u:%g %a" ${i%::*})
+            if ! tt "$i" "*media"; then
+              set -- $(stat -c "%u:%g %a" ${i%::*})
+            fi
             rm -rf ${i%::*} 2>/dev/null
             if ln /data/.__hltest ${i%::*} 2>/dev/null; then
               rm ${i%::*}
@@ -746,8 +755,13 @@ case "$param1" in
             fi
             t -n "$lib_dir" && ln -sf $lib_dir ${i%::*}/lib
             # restore attributes
-            chown -R $1 ${i%::*}
-            chmod $2 ${i%::*}
+            if tt "$i" "*media"; then
+              user=$(stat -c "%U" /data/data/$pkg)
+              chown -R media_rw:${user}_ext ${i%::*}
+            else
+              chown -R $1 ${i%::*}
+              chmod $2 ${i%::*}
+            fi
           done
           rm -rf /dev/._split 2>/dev/null
           mkdir /dev/._split
@@ -755,6 +769,7 @@ case "$param1" in
           ls  -1 /dev/._split | while IFS= read -r f; do
             t -f /dev/._split/$f && .  /dev/._split/$f 2>/dev/null
           done
+          /system/bin/restorecon -R /data/data/$pkg > /dev/null 2>&1
           /system/bin/restorecon -R /data/user*/0/$pkg > /dev/null 2>&1
         fi
 
@@ -812,7 +827,32 @@ case "$param1" in
           chown 1000:1000 /data/system/xlua
           chmod 0770 /data/system/xlua
         }
-      . $bkp_dir/_sysdata/restore.sh > /dev/null 2>&1
+      #. $bkp_dir/_sysdata/restore.sh > /dev/null 2>&1
+      for i in $(cat  $bkp_dir/_sysdata/restore.sh | awk '{ print $3 "::" $7 }'); do
+         #echo $i
+         target_file=${i%::*}
+         bkp_file=${i#*::}
+         #echo $bkp_file
+         if [ -f $target_file ]; then
+           echo "    Installing: $target_file"
+           cat $bkp_file > $target_file
+         else
+           if tt "$target_file" "/data/system/users*"; then
+             echo "    Installing (plus fixing ownership & permissions): $target_file"
+             cp $bkp_file $target_file
+             chown system:system $target_file
+             chmod 0600 $target_file
+          elif tt "$target_file" "/data/*/apexdata/com.android.wifi/WifiConfigStoreSoftAp.xml"; then
+            echo "    Installing (plus fixing ownership & permissions): $target_file"
+            cp $bkp_file $target_file
+            chown system:system $target_file
+            chmod 0600 $target_file
+          else
+            echo "    WARNING: File does not exist, do not know how to handle ownership & permissions, skipping install: $target_file"
+          fi
+         fi
+         #ls -al $(dirname $target_file)
+      done
     fi
 
     # restore magisk data
