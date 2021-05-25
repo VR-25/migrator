@@ -26,6 +26,8 @@ sysdata="/data/system_?e/0/accounts_?e.db*
 /data/system/sync/accounts.xml
 /data/misc/adb/adb*_keys*
 /data/misc/bluedroid/bt_config.*
+/data/misc/apexdata/com.android.wifi/WifiConfigStoreSoftAp.xml
+/data/misc/apexdata/com.android.wifi/WifiConfigStore.xml
 /data/misc/wifi/WifiConfigStore.xml
 /data/misc/wifi/softap.conf
 /data/system/xlua/xlua.db*
