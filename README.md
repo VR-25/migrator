@@ -1,10 +1,10 @@
 # Migrator - A Backup Solution and Data Migration Utility for Android
 
 
-Install as a regular Magisk module (no reboot required, though).
+Install as a regular Magisk module - no reboot required, though.
 If `M` and `migrator` executables are unavailable before a reboot, use `/dev/M` or `/dev/migrator`.
 
-`migrator.sh` can be extracted from the root of the zip and used as is (e.g., `su -c sh migrator.sh`).
+`migrator` can be extracted from the root of the zip and used as is (e.g., `su -c sh migrator`).
 
 Busybox is required on systems not rooted with Magisk.
 The binary can simply be placed in `/data/adb/bin/`.
@@ -14,12 +14,6 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
-v2020.9.24-beta (202009240)
-
-- Do not remount / rw if it's not tmpfs.
-- Fixed backup import issue.
-
-
 v2020.9.13-beta.1 (202009131)
 
 - Enhanced system data backup and restore logic.
@@ -33,51 +27,44 @@ Release Notes
   - Nothing was done in regards to the "MIUI 12" bootloop issue. The root cause is still unknown.
 
 
-v2020.9.11-beta (202009110)
+v2020.9.24-beta (202009240)
 
-- "-m" option and M sub-option (as in -beM) to move hard link backups to internal sdcard, so that they survive factory resets.
-When launched without the -m (move) option, Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
-/data/migrator/ is inconvenient, but more private than /data/media/ and /data/media/0/.
+- Do not remount / rw if it's not tmpfs.
+- Fixed backup import issue.
 
-- Auto-generate sample /sdcard/Download/migrator/packages.list.
 
-- Backup/restore LineageOS-specific Android settings as well.
+v2021.7.16-beta (202107160)
 
-- copy README.md to /sdcard/Download/migrator/.
+- APKs are no longer hard-linked (crash due to SELinux).
+- Data dir is /sdcard/Documents/vr25/migrator/.
+- Exclude thumbnails, input method and adb settings from backups.
+- General optimizations
+- Installer prints changelog and other info.
+- Inverted changelog order.
+- Move option is -M to prevent confusion (formerly -m).
+- Updated documentation & bundled terminal.
 
-- Enforce Unix line endings (LF) in /data/migrator.conf before parsing it.
-This ensures config files written on Windows Notepad or other CRLF-loving editors still work as expected.
+Merged pull request #5 from SebastianApel/master
 
-- Exported backups are now imported to local/ as opposed to imported/ in /data/migrator/.
-This means the "i" flag, as in -ri is no longer necessary/valid.
+  Enhancements:
 
-- Fixed: "migrator" executable inaccessible or not found.
+  - Backup /data/media/0/Android/data/${pkg} [used for pictures by ch.threema.app]
+  - And also restore it later into the correct location (including setting the correct user & perms)
+  - Also backup widget configuration and roles of apps into _sysdata
+  - Wifi Config is at a different location in Android 11 - make sure it's backed up
+  - Better approach to restoring _sysdata (handle case where file does not exist [in some cases])
 
-- Removed long options (e.g., --backup --app) to reduce overhead.
-Other performance enhancements were made on top of that.
+  Bugfixes:
 
-- System data (D) is no longer hard-linked.
-Regular copies are made instead.
-Android dislikes otherwise.
-
-- Two flags changed: A --> b (both (app and data)), E --> e (everything).
-
-- Updated documentation.
-This includes data migrator tutorial, flag mnemonics (e.g., -rb = restore both (app and data)) and more.
-As hard as the text may seem, read the damn thing anyway and give me some feedback on it... please!
-
-Release Notes
-  - MIUI users who face the "reboot to fastboot" issue should refrain from flashing the zip for now.
-  - I recommend extracting zip_file/migrator.sh and running it as is - until the cause of that issue is identified and eliminated.
-  - Usage example: "su -c sh /path/to/migrator.sh -be"
-  - An alias can be appended to Termux's .bashrc to save time and effort, e.g., alias M="su -c sh /sdcard/Download/migrator.sh".
+  - In recovery mode, /data/user/0 does not exist (at least on my phone) - /data/data works
+  - Apps were crashing without RestoreCon of /data/data/$pkg - added that
 ```
 
 ---
 ## LICENSE
 
 
-Copyright 2018-2020, VR25
+Copyright 2018-present, VR25 @ xda-developers
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -94,12 +81,31 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 
 ---
+## Donations
+
+
+- [Liberapay](https://liberapay.com/VR25/)
+- [Patreon](https://patreon.com/vr25/)
+- [PayPal](https://paypal.me/vr25xda/)
+
+
+---
+## Online Support
+
+
+- [Facebook page](https://fb.me/vr25xda/)
+- [Git repository](https://github.com/VR-25/acc/)
+- [Telegram channel](https://t.me/vr25_xda/)
+- [Telegram group](https://t.me/migrator_group/)
+
+
+---
 ## --help
 
 ```
-Migrator v2020.9.24-beta (202009240)
+Migrator v2021.7.16-beta (202107160)
 A Backup Solution and Data Migration Utility for Android
-Copyright 2018-2020, VR25
+Copyright 2018-present, VR25 @ xda-developers
 License: GPLv3+
 
 
@@ -120,7 +126,7 @@ M is a migrator alias.
 OPTIONS[flags]
 
 Backup
--b[abdDemMns] [regex|-v regex] [[+ file or full pkg names] | [/path/to/list] | [-- for /sdcard/Download/migrator/packages.list]]
+-b[abdDemMns] [regex|-v regex] [[+ file or full pkg names] | [/path/to/list] | [-- for /sdcard/Documents/vr25/migrator/packages.list]]
 
 Delete local backups
 -d <"bkp name (wildcards supported)" ...>
@@ -135,11 +141,11 @@ Import backups
 List backups
 -l [regex|-v regex]
 
-Export logs to /sdcard/Download/migrator/migrator.log.bz2
+Export logs to /sdcard/Documents/vr25/migrator/migrator.log.bz2
 -L
 
 Make hard link backups immune to factory resets
--m
+-M
 
 Force all apps to reregister for push notifications (Google Cloud Messaging)
 -n
@@ -160,7 +166,7 @@ D: system data
 m: magisk data
 M: move /data/migrator to internal sdcard
 s: settings (global, secure and system)
-e: everything (-be = -bADms, -re = -rAms)
+e: everything (-be = -bbDms, -re = -rbms)
 i: interactive (-ei, -ii)
 n: not backed up (-bn) or not installed (-rn)
 
@@ -186,7 +192,7 @@ Backup everything
 migrator -be + $(pm list packages -s | sed 's/^package://')
 
 Backup everything, except system apps and move /data/migrator to internal sdcard, so that hard link backups survive factory resets
-When launched without the -m (move) option, Migrator automatically moves hard link backups back to /data/migrator/local, for convenience
+When launched without the -M (move) option, Migrator automatically moves hard link backups back to /data/migrator/local, for convenience
 migrator -beM
 
 Backup all users apps' data (d)
@@ -198,7 +204,7 @@ migrator -d \*
 Delete Facebook Lite and Instagram backups
 migrator -d "*facebook.lite*" "*instag*"
 
-Export all backups to /sdcard/Download/migrator/exported/
+Export all backups to /sdcard/Documents/vr25/migrator/exported/
 migrator -e
 
 ... To /storage/XXXX-XXXX/migrator_exported
@@ -207,7 +213,7 @@ migrator -e -d /storage/XXXX-XXXX
 Interactive export
 migrator -ei
 
-Import all backups from /sdcard/Download/migrator/exported
+Import all backups from /sdcard/Documents/vr25/migrator/exported
 migrator -i
 
 ... From /storage/XXXX-XXXX/migrator_exported
@@ -249,7 +255,7 @@ migrator -rn
 
 Migrator can backup/restore apps (a), respective data (d) and runtime permissions.
 
-The order of secondary options is irrelevent (e.g., -rda = -rad, "a" and "d" are secondary options).
+The order of secondary options is irrelevant (e.g., -rda = -rad, "a" and "d" are secondary options).
 
 Everything in /data/adb/, except magisk/ is considered "Magisk data" (m).
 After restoring such data, one has to launch Magisk Manager and disable/remove all modules that are or may be incompatible with the [new] ROM.
@@ -270,7 +276,7 @@ Backups are stored in /data/migrator/local/.
 These take virtually no extra storage space (hard links).
 
 Backups can be exported as individual [compressed] archives (highly recommended).
-Data is exported to /sdcard/Download/migrator/exported/ by default - and imported to "/data/migrator/local/".
+Data is exported to /sdcard/Documents/vr25/migrator/exported/ by default - and imported to "/data/migrator/local/".
 The default compression method is <none> (.tar file).
 Method here refers to "<program> <options>" (e.g., "zstd -1").
 The decompression/extraction method to use is automatically determined based on file extension.
@@ -339,7 +345,7 @@ Notes
 - If you have to format data, export backups to external storage after step 1 below (-e -d /storage/XXXX-XXXX) and later import with -i -d storage/XXXX-XXXX).
 - If you use a different root method, ignore Magisk-related steps.
 - In "-beM", the "M" sub-option means "move hard link backups to internal sdcard, so that they survive factory resets".
-  When launched without the -m (move) option (i.e., migrator -m), Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
+  When launched without the -M (move) option (i.e., migrator -M), Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
 - Using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
 
 1. Backup everything, except system apps: "migrator -beM".
@@ -361,14 +367,19 @@ SYSTEM DATA (D)
 If you find any issue after restoring system data (-rD), remove the associated files with "su -c rm <line>".
 
 /data/system_?e/0/accounts_?e.db*
-/data/misc/adb/adb_keys
-/data/misc/bluedroid/bt_config.conf
+/data/system/sync/accounts.xml
+/data/misc/bluedroid/bt_config.*
+/data/misc/apexdata/com.android.wifi/WifiConfigStoreSoftAp.xml
+/data/misc/apexdata/com.android.wifi/WifiConfigStore.xml
 /data/misc/wifi/WifiConfigStore.xml
 /data/misc/wifi/softap.conf
 /data/system/xlua/xlua.db*
 /data/system/users/0/photo.png
+/data/system/users/0/appwidgets.xml
+/data/system/users/0/roles.xml
 /data/system/users/0/wallpaper*
-/data/user*/0/com.android.*provider*/databases/*.db*
+/data/user_de/0/com.android.*provider*/databases/*.db*
+/data/data/com.android.*provider*/databases/*.db*
 /data/system/deviceidle.xml
 
 

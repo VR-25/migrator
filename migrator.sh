@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # Migrator
 # A Backup Solution and Data Migration Utility for Android
-# Copyright 2018-2020, VR25
+# Copyright 2018-present, VR25 @ xda-developers
 # License: GPLv3+
 
 
@@ -14,9 +14,9 @@ ssaid=false
 log=/dev/migrator.log
 tmp=/dev/migrator.tmp
 bkp_dir=/data/migrator/local
-data_dir=/sdcard/Download/migrator
+data_dir=/sdcard/Documents/vr25/migrator
 packages=/data/system/packages.
-version="v2020.9.24-beta (202009240)"
+version="v2021.7.16-beta (202107160)"
 ssaid_xml_tmp=/dev/.settings_ssaid.xml.tmp
 settings=/data/system/users/0/settings_
 ssaid_xml=${settings}ssaid.xml
@@ -24,7 +24,6 @@ ssaid_boot_script=${bkp_dir%/*}/enable-ssaid-apps.sh
 
 sysdata="/data/system_?e/0/accounts_?e.db*
 /data/system/sync/accounts.xml
-/data/misc/adb/adb*_keys*
 /data/misc/bluedroid/bt_config.*
 /data/misc/apexdata/com.android.wifi/WifiConfigStoreSoftAp.xml
 /data/misc/apexdata/com.android.wifi/WifiConfigStore.xml
@@ -38,6 +37,9 @@ sysdata="/data/system_?e/0/accounts_?e.db*
 /data/user_de/0/com.android.*provider*/databases/*.db*
 /data/data/com.android.*provider*/databases/*.db*
 /data/system/deviceidle.xml"
+
+# excluded system data
+#/data/misc/adb/adb*_keys*
 
 
 get_apk_dir() {
@@ -107,7 +109,7 @@ tt "${1-}" "-B|-L" || {
 # prepare busybox and extra executables
 
 bin_dir=/data/adb/bin
-busybox_dir=/dev/.busybox
+busybox_dir=/dev/.vr25/busybox
 magisk_busybox=/data/adb/magisk/busybox
 
 [ -x $busybox_dir/ls ] || {
@@ -129,6 +131,19 @@ magisk_busybox=/data/adb/magisk/busybox
 
 export PATH="$bin_dir:$busybox_dir:/data/adb/modules_update/migrator/bin:/data/adb/modules/migrator/bin:$PATH"
 unset bin_dir busybox_dir magisk_busybox
+
+
+# "rsync -t --inplace --no-W" wrapper
+which rsync > /dev/null || \
+  rsync() {
+    shift 3
+    tt "$2" "*/" && mkdir -p "$2"
+    if tt "$1" "*/"; then
+      cp -Rduf "$1"* "$1".* "$2" 2>/dev/null
+    else
+      cp -Rduf "$1" "$2"
+    fi
+  }
 
 
 param1=${1-}
@@ -295,26 +310,37 @@ case "$param1" in
       # backup app
       app=false
       if $both || tt "$param1" "-b*[ae]*"; then
-        rm $bkp_dir/$pkg/*.apk
-        ln $(get_apk_dir $pkg)/*.apk $bkp_dir/$pkg/ && {
+        if t -f $(get_apk_dir $pkg)/base.apk; then
           app=true
           printf "  $pkg\n    App\n"
-        }
-      fi 2>/dev/null
+          rsync -t --inplace --no-W $(get_apk_dir $pkg)/*.apk $bkp_dir/$pkg/ 2>/dev/null
+        fi
+        for f in $bkp_dir/$pkg/*.apk; do
+          t -f $(get_apk_dir $pkg)/${f##*/} || rm $f
+        done
+        # legacy
+        # APK hard links do not play nice with SELinux
+        # rm $bkp_dir/$pkg/*.apk
+        # ln $(get_apk_dir $pkg)/*.apk $bkp_dir/$pkg/ && {
+        #   app=true
+        #   printf "  $pkg\n    App\n"
+        # }
+      # fi 2>/dev/null
+      fi
 
       # backup data
       if $both || tt "$param1" "-b*[de]*"; then
         $app && echo "    Data" || printf "  $pkg\n    Data\n"
-        killall -STOP $pkg > /dev/null 2>&1
         rm -rf $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de $bkp_dir/$pkg/${pkg}_media 2>/dev/null
-        mkdir $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de $bkp_dir/$pkg/${pkg}_media
+        #mkdir $bkp_dir/$pkg/$pkg $bkp_dir/$pkg/${pkg}_de $bkp_dir/$pkg/${pkg}_media # rsync [wrapper] will handle this
         : > $bkp_dir/$pkg/modes.txt
         for e in /data/data/${pkg}::$pkg /data/user_de/0/${pkg}::${pkg}_de /data/media/0/Android/data/${pkg}::${pkg}_media; do
           ls -1d ${e%::*}/* ${e%::*}/.* 2>/dev/null \
-            | grep -Ev '/\.$|/\.\.$|/app_optimized|/app_tmp|/cache$|/code_cache$|/dex$|/lib$|oat$' | \
+            | grep -Eiv '/\.$|/\.\.$|/app_optimized|/app_tmp|cache|/dex$|/lib$|oat$|thumbnail' | \
             while IFS= read -r i; do
               t -z "$i" && continue
-              cp -dlR "$i" $bkp_dir/$pkg/${e#*::}/
+              #cp -dlR "$i" $bkp_dir/$pkg/${e#*::}/
+              rsync -rtl --inplace --no-W "$i" $bkp_dir/$pkg/${e#*::}/
               find "$i" -print0 2>/dev/null | xargs -0 -n 10 stat -c "%a %n" \
                 >> $bkp_dir/$pkg/modes.txt
             done
@@ -375,6 +401,8 @@ case "$param1" in
           done
         fi
       fi
+      # exclude input method settings to prevent "no keyboard" issue
+      sed -i /inputmethod/d $bkp_dir/_settings/secure.txt
     fi
 
     # backup system data
@@ -424,7 +452,7 @@ case "$param1" in
 
     t $param1 = -B && ssaid_only=false || ssaid_only=true
 
-    until t -d /sdcard/Download \
+    until t -d /sdcard/Documents \
       && t .$(getprop sys.boot_completed 2>/dev/null) = .1 \
       && pm list packages -s > /dev/null 2>&1
     do
@@ -625,7 +653,7 @@ case "$param1" in
   ;;
 
 
-  -m) # make hard link backups immune to factory resets
+  -M) # make hard link backups immune to factory resets
     mv_bkps
   ;;
 
@@ -939,7 +967,7 @@ case "$param1" in
     cat <<EOF | more
 Migrator $version
 A Backup Solution and Data Migration Utility for Android
-Copyright 2018-2020, VR25
+Copyright 2018-present, VR25 @ xda-developers
 License: GPLv3+
 
 
@@ -979,7 +1007,7 @@ Export logs to $data_dir/migrator.log.bz2
 -L
 
 Make hard link backups immune to factory resets
--m
+-M
 
 Force all apps to reregister for push notifications (Google Cloud Messaging)
 -n
@@ -1000,7 +1028,7 @@ D: system data
 m: magisk data
 M: move ${bkp_dir%/*} to internal sdcard
 s: settings (global, secure and system)
-e: everything (-be = -bADms, -re = -rAms)
+e: everything (-be = -bbDms, -re = -rbms)
 i: interactive (-ei, -ii)
 n: not backed up (-bn) or not installed (-rn)
 
@@ -1026,7 +1054,7 @@ Backup everything
 ${0##*/} -be + \$(pm list packages -s | sed 's/^package://')
 
 Backup everything, except system apps and move ${bkp_dir%/*} to internal sdcard, so that hard link backups survive factory resets
-When launched without the -m (move) option, Migrator automatically moves hard link backups back to $bkp_dir, for convenience
+When launched without the -M (move) option, Migrator automatically moves hard link backups back to $bkp_dir, for convenience
 ${0##*/} -beM
 
 Backup all users apps' data (d)
@@ -1089,7 +1117,7 @@ ${0##*/} -rn
 
 Migrator can backup/restore apps (a), respective data (d) and runtime permissions.
 
-The order of secondary options is irrelevent (e.g., -rda = -rad, "a" and "d" are secondary options).
+The order of secondary options is irrelevant (e.g., -rda = -rad, "a" and "d" are secondary options).
 
 Everything in /data/adb/, except magisk/ is considered "Magisk data" (m).
 After restoring such data, one has to launch Magisk Manager and disable/remove all modules that are or may be incompatible with the [new] ROM.
@@ -1179,7 +1207,7 @@ Notes
 - If you have to format data, export backups to external storage after step 1 below (-e -d /storage/XXXX-XXXX) and later import with -i -d storage/XXXX-XXXX).
 - If you use a different root method, ignore Magisk-related steps.
 - In "-beM", the "M" sub-option means "move hard link backups to internal sdcard, so that they survive factory resets".
-  When launched without the -m (move) option (i.e., migrator -m), Migrator automatically moves hard link backups back to /data/migrator/local/, for convenience.
+  When launched without the -M (move) option (i.e., migrator -M), Migrator automatically moves hard link backups back to $bkp_dir/, for convenience.
 - Using a terminal emulator app other than NetHunter means you have to exclude it from backups/restores or detach migrator from it.
 
 1. Backup everything, except system apps: "${0##*/} -beM".
@@ -1200,16 +1228,7 @@ SYSTEM DATA (D)
 
 If you find any issue after restoring system data (-rD), remove the associated files with "su -c rm <line>".
 
-/data/system_?e/0/accounts_?e.db*
-/data/misc/adb/adb_keys
-/data/misc/bluedroid/bt_config.conf
-/data/misc/wifi/WifiConfigStore.xml
-/data/misc/wifi/softap.conf
-/data/system/xlua/xlua.db*
-/data/system/users/0/photo.png
-/data/system/users/0/wallpaper*
-/data/user*/0/com.android.*provider*/databases/*.db*
-/data/system/deviceidle.xml
+$sysdata
 
 
 ASSORTED NOTES & TIPS

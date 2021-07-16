@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# enable apps with Settings.Secure.ANDROID_ID (SSAID) and start automatic backups (if enabled)
+# enable apps with Settings.Secure.ANDROID_ID (SSAID) and start backup daemon (if enabled)
 
-/data/adb/magisk/busybox start-stop-daemon -bx ${0%/*}/migrator.sh -S -- -B
+start-stop-daemon -bx ${0%/*}/migrator.sh -S -- -B || (${0%/*}/migrator.sh -B) &
 exit 0

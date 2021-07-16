@@ -1,10 +1,14 @@
-Find and bundle static ccrypt binaries
+find and bundle static ccrypt binaries
 
 GMS "can't read media"?
 
-Wizard
+wizard
 
-Some /data/adb/ symlinks (e.g., /data/adb/acc) are not backed up/restored
+some /data/adb/ symlinks (e.g., /data/adb/acc) are not backed up/restored
 
-Issue on MIUI ROMs? Dirty flash required after Migrator install/upgrade?
-  automatic backups not working?
+automatic backups not working on MIUI?
+
+export backups directly (no hard-links)
+  [some] devices have issues with secontexts
+
+filter out cache and thumbnail for *_media/files/

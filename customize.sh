@@ -72,18 +72,35 @@ $BOOTMODE && ! test -d /data/data/com.offsec.nhterm && {
   pm install $MODPATH/system/app/com.offsec.nhterm/com.offsec.nhterm.apk > /dev/null
 }
 
+
 # copy README;
-data_dir=/sdcard/Download/migrator
+data_dir=/sdcard/Documents/vr25/migrator
 mkdir -p $data_dir
+mv -f /sdcard/Download/migrator/* $data_dir 2>/dev/null \
+  && rmdir /sdcard/Download/migrator # migrate old data_dir
 cp -f $MODPATH/README.md $data_dir/
+
 
 # generate a sample packages.list
 test -f $data_dir/packages.list \
   || echo "# Parsed by M -b --
 # Any package, including system's can be listed here
-# Extended grep regex is supported - meaning, writing full package nanes is not strictly necessary
+# Extended grep regex is supported - meaning, writing full package names is not strictly necessary
 # For convenience/intuitiveness a comma can be used in place of '|', for alternation
 
 inputmethod.latin
 providers.userdictionary
 chrome,youtube,d.vending" > $data_dir/packages.list
+
+
+# print changelog
+
+ui_print "- Done
+- Rebooting is not required
+- If regular commands don't work, try \"sh /data/M\"
+
+
+CHANGELOG
+
+$(sed -En "/^## CHANGELOG/,/^## LICENSE/p" $data_dir/README.md | grep -Ev '^---|^## |^```')"
+ui_print() { :; }
