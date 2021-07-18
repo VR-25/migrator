@@ -12,3 +12,7 @@ export backups directly (no hard-links)
   [some] devices have issues with secontexts
 
 filter out cache and thumbnail for *_media/files/
+
+could you add an option to back up apks and data to separate files and skip the backup of the apks if the app has not been updated since the last backup? I want to decrease the number of writes on my external sdcard and this will also probably speed up the backup process
+
+I also think it's good to skip the Magisk Manager backup (especially if it's hidden), because restoring it when you already have another Manager installed can cause some confusion. If the system has sqlite3, you can parse the Manager package name through the /data/adb/magisk.db file

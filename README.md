@@ -14,19 +14,6 @@ The binary can simply be placed in `/data/adb/bin/`.
 ## CHANGELOG
 
 ```
-v2020.9.13-beta.1 (202009131)
-
-- Enhanced system data backup and restore logic.
-- General fixes & optimizations
-- Parse "codePath" from /data/system/package.xml.
-- Updated data migration tutorial.
-
-Release Notes
-  - Please test whether system data backup and restore work as expected.
-  - This version fixes several issues that affected encrypted devices and Android 11 in particular.
-  - Nothing was done in regards to the "MIUI 12" bootloop issue. The root cause is still unknown.
-
-
 v2020.9.24-beta (202009240)
 
 - Do not remount / rw if it's not tmpfs.
@@ -58,13 +45,19 @@ Merged pull request #5 from SebastianApel/master
 
   - In recovery mode, /data/user/0 does not exist (at least on my phone) - /data/data works
   - Apps were crashing without RestoreCon of /data/data/$pkg - added that
+
+
+Current
+
+- Suppress error: "runtime-perms.txt: no such file or directory".
+- Updated module.prop, README.md and TODO.txt.
 ```
 
 ---
 ## LICENSE
 
 
-Copyright 2018-present, VR25 @ xda-developers
+Copyright 2018-present, VR25
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -98,6 +91,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 - [Telegram channel](https://t.me/vr25_xda/)
 - [Telegram group](https://t.me/migrator_group/)
 
+Anyone can contribute with pull requests, as long as they follow my scripting style.
+Having very distinct scripting styles can be a huge mess.
+I'm open to changes, though.
+If you think there's room for improvement in my style, I'll be glad to hear you out.
+
 
 ---
 ## --help
@@ -105,7 +103,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 ```
 Migrator v2021.7.16-beta (202107160)
 A Backup Solution and Data Migration Utility for Android
-Copyright 2018-present, VR25 @ xda-developers
+Copyright 2018-present, VR25
 License: GPLv3+
 
 

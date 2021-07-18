@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # Migrator
 # A Backup Solution and Data Migration Utility for Android
-# Copyright 2018-present, VR25 @ xda-developers
+# Copyright 2018-present, VR25
 # License: GPLv3+
 
 
@@ -802,7 +802,7 @@ case "$param1" in
         fi
 
         # restore runtime permissions
-        for perm in $(cat $pkg/runtime-perms.txt); do
+        for perm in $(cat $pkg/runtime-perms.txt 2>/dev/null); do
           pm grant $pkg $perm 2>/dev/null
         done
       done < $tmp
@@ -967,7 +967,7 @@ case "$param1" in
     cat <<EOF | more
 Migrator $version
 A Backup Solution and Data Migration Utility for Android
-Copyright 2018-present, VR25 @ xda-developers
+Copyright 2018-present, VR25
 License: GPLv3+
 
 
